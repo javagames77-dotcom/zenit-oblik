@@ -343,7 +343,7 @@
         s.adminUser = { id: 1, login: login || 'admin', name: login || 'admin', role: 'admin', lang: 'uk', must_change: false }; save();
         return { success: true, token: s.adminToken, user: s.adminUser };
       },
-      async violations() { return { rows: [], repeat: [] }; },
+      async violations() { return { page: { rows: [], total: 0 }, repeat: [] }; },
       async discipline(empId, month) { return { month, days: [], totals: {} }; },
       async excuse() { return { ok: true }; },
       async schedule(branchId) { return { branchId, tolerance: 5, days: [1, 2, 3, 4, 5, 6, 7].map(dow => ({ dow, isWork: dow <= 5, winFrom: '08:00', winTo: '18:00', workMin: 540, lunchFrom: '11:00', lunchTo: '13:00', lunchMin: 60 })) }; },
@@ -391,6 +391,7 @@
             if (!(e && (e.tab.includes(q) || (e.name.uk + e.name.ru).toLowerCase().includes(q))) && !(ps && (ps.name + ps.company).toLowerCase().includes(q))) return false; }
           return true;
         }).reverse();
+        if (f.page) { const sz = f.size || 50; return { total: list.length, rows: MOCK.admin._rows(s, list.slice((f.page - 1) * sz, f.page * sz)) }; }
         return MOCK.admin._rows(s, list);
       },
       async check(id) { const s = fresh(); const p = s.punches.find(x => x.id === id); if (p) p.checked = true; save(); return { ok: true }; },
@@ -431,6 +432,10 @@
       async report(f) {
         // демо: приход/уход по дням в формате боевого отчета (без расчета нарушений)
         if (f && f.mode === 'rating') return [];
+        const all = await MOCK.admin._reportDays(f), size = f && f.size || 0, page = f && f.page || 1;
+        return { total: all.length, rows: size ? all.slice((page - 1) * size, page * size) : all };
+      },
+      async _reportDays(f) {
         const rows = await MOCK.admin.punches(Object.assign({}, f, { verdict: '' }));
         const by = {}, hm = x => new Date(x).toTimeString().slice(0, 5);
         rows.filter(r => r.accepted && r.employee).forEach(r => {

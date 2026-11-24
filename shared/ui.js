@@ -63,5 +63,23 @@
       return `<img src="${prefix}shared/logo.svg" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span>`;
     }
   };
+  // Пагинация: UI.pager(box, total, page, size, onChange(page, size))
+  UI.pager = (box, total, page, size, cb) => {
+    if (!box) return;
+    const pages = Math.max(1, Math.ceil(total / size)); page = Math.min(Math.max(1, page), pages);
+    const nums = []; const add = n => nums.push(n);
+    [1, page - 2, page - 1, page, page + 1, page + 2, pages].filter((n, i, a) => n >= 1 && n <= pages && a.indexOf(n) === i).sort((a, b) => a - b)
+      .forEach((n, i, a) => { if (i && n - a[i - 1] > 1) add('…'); add(n); });
+    const from = total ? (page - 1) * size + 1 : 0, to = Math.min(total, page * size);
+    box.innerHTML = total <= 50 && page === 1 && size === 50 ? '' : `<div class="pager">
+      <span class="pg-info">${from}–${to} / ${total}</span>
+      <div class="pg-nums"><button type="button" class="pg" data-pg="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="prev">←</button>
+        ${nums.map(n => n === '…' ? '<span class="pg-gap">…</span>' : `<button type="button" class="pg ${n === page ? 'on' : ''}" data-pg="${n}">${n}</button>`).join('')}
+        <button type="button" class="pg" data-pg="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="next">→</button></div>
+      <select class="in pg-size" aria-label="size">${[50, 100, 200].map(n => `<option value="${n}" ${n === size ? 'selected' : ''}>${n}</option>`).join('')}</select></div>`;
+    box.onclick = e => { const b = e.target.closest('[data-pg]'); if (b && !b.disabled) cb(+b.dataset.pg, size); };
+    const sel = box.querySelector('.pg-size'); if (sel) sel.onchange = () => cb(1, +sel.value);
+  };
+  UI.debounce = (fn, ms) => { let tm; return (...a) => { clearTimeout(tm); tm = setTimeout(() => fn(...a), ms || 300); }; };
   window.UI = UI;
 })();

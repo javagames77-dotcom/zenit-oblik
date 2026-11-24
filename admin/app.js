@@ -123,7 +123,7 @@
         <a href="../employee/index.html" target="_blank">PWA</a><a href="../scanner/index.html" target="_blank">Scanner</a></div>` : ''}
       <div class="layout">
         <nav class="side" aria-label="Меню">${ROUTES.map(([r, k]) => `<a class="si" href="#${r}" data-r="${r}"><span data-i18n="${k}"></span>${r === 'sb' ? '<span class="b p-wa" id="sbBadge"></span>' : ''}${r === 'devices' ? '<span class="b p-er" id="devBadge"></span>' : ''}</a>`).join('')}
-          <div class="ver"><span data-i18n="version"></span> 1.3</div></nav>
+          <div class="ver"><span data-i18n="version"></span> 1.4</div></nav>
         <main class="main" id="view"></main>
       </div>`;
     I18N.apply();
@@ -220,13 +220,16 @@
         <label class="f"><span>${t('c_viol')}</span><select class="in" id="dty"><option value="">${t('f_all')}</option><option value="late">${t('v_late')}</option><option value="early">${t('v_early')}</option><option value="lunch">${t('c_lunch')}</option><option value="absent">${t('v_absent')}</option></select></label>
         <button class="btn pri" type="button" id="dgo">${t('rep_build')}</button></div></div>
       <section class="card rc" id="rep" style="margin-bottom:16px"></section>
-      <section class="card" style="overflow:hidden"><div class="tw"><table>${dayHead(true)}<tbody id="dB"></tbody></table></div></section>`;
-    const go = async () => {
-      const r = await API.admin.violations({ from: v.querySelector('#df').value, to: v.querySelector('#dt').value, branchId: +v.querySelector('#db').value, type: v.querySelector('#dty').value });
+      <section class="card" style="overflow:hidden"><div class="tw"><table>${dayHead(true)}<tbody id="dB"></tbody></table></div><div id="pg"></div></section>`;
+    let page = 1, size = 50;
+    const go = async keep => {
+      if (!keep) page = 1;
+      const r = await API.admin.violations({ from: v.querySelector('#df').value, to: v.querySelector('#dt').value, branchId: +v.querySelector('#db').value, type: v.querySelector('#dty').value, page, size });
+      UI.pager(v.querySelector('#pg'), r.page.total, page, size, (p, s2) => { page = p; size = s2; go(true); });
       v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${x.lateMin} ${t('min')}</span>`).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
-      v.querySelector('#dB').innerHTML = r.rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`;
+      v.querySelector('#dB').innerHTML = r.page.rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`;
     };
-    v.querySelector('#dgo').onclick = go; await go();
+    v.querySelector('#dgo').onclick = () => go(); await go();
   }
 
   // ---------- график филиала ----------
@@ -364,15 +367,18 @@
             ${['PWA_LIVE', 'PWA_SCREEN', 'STATIC', 'NO_ACCESS', 'REPLAY', 'INVALID', 'PASS_OK', 'PASS_SCREEN', 'PASS_DENIED'].map(x => `<option value="${x}">${t('v_' + x)}</option>`).join('')}</select></label>
           <label class="f" style="flex:1 1 200px"><span>${t('c_emp')}</span><input class="in" id="pq" data-i18n-ph="search_emp"></label>
           <button class="btn pri" type="button" id="pcsv">${t('export_csv')}</button></div></div>
-        <section class="card" style="overflow:hidden"><div class="tw"><table>${punchHead()}<tbody id="pB"></tbody></table></div></section>`;
+        <section class="card" style="overflow:hidden"><div class="tw"><table>${punchHead()}<tbody id="pB"></tbody></table></div><div id="pg"></div></section>`;
+      let page = 1, size = 50;
       const f = () => ({ from: pf.value, to: pt.value, branchId: +pb.value, verdict: pv.value, q: pq.value });
       const pf = v.querySelector('#pf'), pt = v.querySelector('#pt'), pb = v.querySelector('#pb'), pv = v.querySelector('#pv'), pq = v.querySelector('#pq');
       const load = async () => {
-        const rows = await API.admin.punches(f());
-        v.querySelector('#cnt').textContent = `${t('found')}: ${rows.length}`;
-        v.querySelector('#pB').innerHTML = rows.slice(0, 400).map(r => rowPunch(r).replace(`<td class="t">`, `<td class="t">${new Date(r.scannedAt).toLocaleDateString('uk-UA').slice(0, 5)} `)).join('') || `<tr><td colspan="6" class="empty">—</td></tr>`;
+        const r = await API.admin.punches(Object.assign(f(), { page, size })), rows = r.rows;
+        v.querySelector('#cnt').textContent = `${t('found')}: ${r.total}`;
+        v.querySelector('#pB').innerHTML = rows.map(r => rowPunch(r).replace(`<td class="t">`, `<td class="t">${new Date(r.scannedAt).toLocaleDateString('uk-UA').slice(0, 5)} `)).join('') || `<tr><td colspan="6" class="empty">—</td></tr>`;
+        UI.pager(v.querySelector('#pg'), r.total, page, size, (p, s2) => { page = p; size = s2; load(); });
       };
-      [pf, pt, pb, pv].forEach(x => x.onchange = load); pq.oninput = load;
+      const reload = () => { page = 1; load(); };
+      [pf, pt, pb, pv].forEach(x => x.onchange = reload); pq.oninput = UI.debounce(reload, 300);
       v.querySelector('#pcsv').onclick = () => exportPunches(f());
       await load();
     },
@@ -382,15 +388,17 @@
       v.innerHTML = `<div class="mh"><div><h1>${t('sb_page')}</h1><p>${t('sb_page_sub')}</p></div>
         <div class="ctl"><label class="chk"><input type="checkbox" id="unc" checked> ${t('f_unchecked')}</label></div></div>
         ${sbTabs('codes')}
-        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_date')}</th><th>${t('c_emp')}</th><th>${t('c_place')}</th><th>${t('c_event')}</th><th>${t('c_code')}</th><th></th></tr></thead><tbody id="sbB"></tbody></table></div></section>`;
+        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_date')}</th><th>${t('c_emp')}</th><th>${t('c_place')}</th><th>${t('c_event')}</th><th>${t('c_code')}</th><th></th></tr></thead><tbody id="sbB"></tbody></table></div><div id="pg"></div></section>`;
+      let page = 1, size = 50;
       const load = async () => {
-        const rows = await API.admin.punches({ from: daysAgo(30), to: today(), verdict: 'flag', unchecked: v.querySelector('#unc').checked });
+        const res = await API.admin.punches({ from: daysAgo(30), to: today(), verdict: 'flag', unchecked: v.querySelector('#unc').checked, page, size }), rows = res.rows;
+        UI.pager(v.querySelector('#pg'), res.total, page, size, (p, s2) => { page = p; size = s2; load(); });
         v.querySelector('#sbB').innerHTML = rows.map(r => `<tr><td class="t">${new Date(r.scannedAt).toLocaleDateString('uk-UA').slice(0, 5)} ${I18N.hm(r.scannedAt)}</td>
           <td>${r.employee ? `<b>${esc(pick(r.employee.name))}</b><small>${t('tab_no')} ${esc(r.employee.tab)} · ${esc(pick(r.employee.pos))}</small>` : r.guest ? `<b>${esc(r.guest.name)}</b><small>${t('guest_pass')} · ${esc(r.guest.company)}</small>` : `<b>${t('unknown_code')}</b>`}</td>
           <td>${placeTxt(r)}</td><td>${evTxt(r.event)}</td><td>${UI.verdictPill(r.verdict)}${r.codeAge && r.verdict === 'PWA_SCREEN' ? `<small>${Math.round(r.codeAge / 60)} ${t('ago_min')}</small>` : ''}${r.reason ? `<small>${t('pr_' + r.reason)}</small>` : ''}</td>
           <td>${r.checked ? `<span class="pill p-mu">${t('checked')}</span>` : `<button class="btn sm" type="button" data-chk="${r.id}">${t('mark_checked')}</button>`}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">—</td></tr>`;
       };
-      v.querySelector('#unc').onchange = load;
+      v.querySelector('#unc').onchange = () => { page = 1; load(); };
       v.addEventListener('click', async e => { const b = e.target.closest('[data-chk]'); if (b) { await API.admin.check(b.dataset.chk); load(); badges(); } });
       await load();
     },
@@ -405,14 +413,21 @@
           <button class="btn sm" type="button" data-bulk="open">${t('open_access')}</button><button class="btn sm" type="button" data-bulk="close">${t('close_access')}</button>
           <button class="btn sm" type="button" data-bulk="profile">${t('assign_profile')}</button><button class="btn sm" type="button" data-bulk="block" style="color:var(--er)">${t('block_all')}</button>
           <button class="lnk" type="button" data-bulk="clear">${t('clear_sel')}</button></div>
-        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th><input type="checkbox" id="eall" aria-label="all"></th><th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_pos')}</th><th>${t('c_branch')}</th><th>${t('c_access')}</th><th>${t('c_phone')}</th><th>${t('c_actions')}</th></tr></thead><tbody id="eB"></tbody></table></div></section>`;
+        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th><input type="checkbox" id="eall" aria-label="all"></th><th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_pos')}</th><th>${t('c_branch')}</th><th>${t('c_access')}</th><th>${t('c_phone')}</th><th>${t('c_actions')}</th></tr></thead><tbody id="eB"></tbody></table></div><div id="pg"></div></section>`;
       let list = [];
       const accCell = e => e.blocked ? `<span class="pill p-er">${t('src_blocked')}</span>` :
         `${e.profile ? `<span class="pill p-bl">${esc(pick(e.profile))}</span>` : `<span class="pill p-mu">${t('src_home')}</span>`}${e.extra ? `<small>+${e.extra} ${t('extra_n')}</small>` : ''}`;
       const bulkUpd = () => { const b = v.querySelector('#bulk'); b.classList.toggle('hidden', !sel.size); v.querySelector('#bn').textContent = `${t('selected')}: ${sel.size}`; };
-      const load = async () => {
-        list = await API.admin.employees(v.querySelector('#eq').value);
-        v.querySelector('#ecnt').textContent = `${t('found')}: ${list.length}`;
+      let page = 1, size = 50, all = [];
+      const load = async (keepPage) => {
+        all = await API.admin.employees(v.querySelector('#eq').value);
+        if (!keepPage) page = 1;
+        draw();
+      };
+      const draw = () => {
+        list = all.slice((page - 1) * size, page * size);
+        UI.pager(v.querySelector('#pg'), all.length, page, size, (p, s2) => { page = p; size = s2; draw(); });
+        v.querySelector('#ecnt').textContent = `${t('found')}: ${all.length}`;
         v.querySelector('#eB').innerHTML = list.map(e => `<tr>
           <td><input type="checkbox" data-sel="${e.id}" ${sel.has(e.id) ? 'checked' : ''} aria-label="${esc(e.tab)}"></td>
           <td class="t mono">${esc(e.tab)}</td><td><button class="namebtn" type="button" data-ed="${e.id}">${esc(pick(e.name))}</button>${e.active ? '' : `<small style="color:var(--er)">${t('fired')}</small>`}</td><td>${esc(pick(e.pos))}</td><td>${esc(pick(e.branch))}</td>
@@ -422,9 +437,9 @@
             <button class="btn sm" type="button" data-st="${e.id}" ${e.active ? '' : 'disabled'}>${t('static_qr')}</button></div></td></tr>`).join('') || `<tr><td colspan="8" class="empty">—</td></tr>`;
         bulkUpd();
       };
-      v.querySelector('#eq').oninput = load;
-      v.querySelector('#eadd').onclick = () => editEmp(null, load);
-      v.querySelector('#eall').onchange = e => { list.forEach(x => e.target.checked ? sel.add(x.id) : sel.delete(x.id)); load(); };
+      v.querySelector('#eq').oninput = UI.debounce(() => load(), 300);
+      v.querySelector('#eadd').onclick = () => editEmp(null, () => load(true));
+      v.querySelector('#eall').onchange = e => { list.forEach(x => e.target.checked ? sel.add(x.id) : sel.delete(x.id)); draw(); };
       v.addEventListener('change', e => { const c = e.target.closest('[data-sel]'); if (c) { c.checked ? sel.add(+c.dataset.sel) : sel.delete(+c.dataset.sel); bulkUpd(); } });
       v.addEventListener('click', async e => {
         const bb = e.target.closest('[data-bulk]');
@@ -497,15 +512,18 @@
       const bs = await API.admin.branches();
       v.innerHTML = `<div class="mh"><div><h1>${t('passes_page')}</h1><p>${t('passes_sub')}</p></div>
         <div class="ctl"><label class="chk"><input type="checkbox" id="pact" checked> ${t('f_active_only')}</label><button class="btn pri" type="button" id="pnew">${t('new_pass')}</button></div></div>
-        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_guest')}</th><th>${t('pp_where')}</th><th>${t('c_valid')}</th><th>${t('c_status')}</th><th>${t('entries')}</th><th>${t('issued_by')}</th><th></th></tr></thead><tbody id="psB"></tbody></table></div></section>`;
+        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_guest')}</th><th>${t('pp_where')}</th><th>${t('c_valid')}</th><th>${t('c_status')}</th><th>${t('entries')}</th><th>${t('issued_by')}</th><th></th></tr></thead><tbody id="psB"></tbody></table></div><div id="pg"></div></section>`;
       let rows = [];
       const leftTxt = p => { const ms = new Date(p.to) - Date.now(); if (ms <= 0) return ''; const h = Math.floor(ms / 36e5); return `${t('left')} ${h >= 24 ? Math.floor(h / 24) + ' ' + t('d_short') + ' ' : ''}${h % 24} ${t('h_short')}`; };
       const dt = iso => `${new Date(iso).toLocaleDateString('uk-UA').slice(0, 5)} ${I18N.hm(iso)}`;
       const stCls = { active: 'p-ok', future: 'p-bl', expired: 'p-mu', revoked: 'p-er', used: 'p-mu' };
-      const load = async () => {
-        rows = await API.admin.passes();
+      let page = 1, size = 50;
+      const load = async () => { rows = await API.admin.passes(); draw(); };
+      const draw = () => {
         const only = v.querySelector('#pact').checked;
-        v.querySelector('#psB').innerHTML = rows.filter(p => !only || ['active', 'future'].includes(p.status)).map(p => `<tr>
+        const flt = rows.filter(p => !only || ['active', 'future'].includes(p.status));
+        UI.pager(v.querySelector('#pg'), flt.length, page, size, (p, s2) => { page = p; size = s2; draw(); });
+        v.querySelector('#psB').innerHTML = flt.slice((page - 1) * size, page * size).map(p => `<tr>
           <td><b>${esc(p.name)}</b><small>${esc(p.company)}${p.phone ? ' · ' + esc(p.phone) : ''}</small></td>
           <td>${p.places.map(x => `${esc(pick(x.branch))} · ${esc(pick(x.gate))}`).join('<br>')}</td>
           <td class="t">${dt(p.from)}<small>→ ${dt(p.to)}</small></td>
@@ -513,7 +531,7 @@
           <td>${p.uses}${p.maxUses ? ' / ' + p.maxUses : ''}</td><td><small style="color:var(--ink)">${esc(p.issuedBy)}</small></td>
           <td><div class="acts">${['active', 'future'].includes(p.status) ? `<button class="btn sm" type="button" data-pl="${p.id}">${t('show_link')}</button><button class="btn sm" type="button" data-pr="${p.id}" style="color:var(--er)">${t('revoke')}</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="7" class="empty">—</td></tr>`;
       };
-      v.querySelector('#pact').onchange = load;
+      v.querySelector('#pact').onchange = () => { page = 1; draw(); };
       v.querySelector('#pnew').onclick = () => newPassModal(bs, load);
       v.addEventListener('click', async e => {
         const b = e.target.closest('button'); if (!b) return;
@@ -566,8 +584,8 @@
           <label class="f"><span>${t('c_branch')}</span>${branchSelect('rb', 0)}</label>
           <label class="chk" id="rbadw"><input type="checkbox" id="rbad"> ${t('only_viol')}</label>
           <button class="btn pri" type="button" id="rgo">${t('rep_build')}</button><button class="btn" type="button" id="rcsv">${t('export_csv')}</button></div></div>
-        <section class="card" style="overflow:hidden"><div class="tw"><table id="rT"></table></div></section>`;
-      let rows = [], mode = 'days', sortK = 'violations', sortD = -1;
+        <section class="card" style="overflow:hidden"><div class="tw"><table id="rT"></table></div><div id="pg"></div></section>`;
+      let rows = [], total = 0, page = 1, size = 50, mode = 'days', sortK = 'violations', sortD = -1;
       const f = () => ({ from: v.querySelector('#rf').value, to: v.querySelector('#rt').value, branchId: +v.querySelector('#rb').value, mode });
       const RCOLS = [['tab', 'c_tab'], ['name', 'c_name'], ['branch', 'c_branch'], ['days', 'r_days'], ['workedMin', 'worked'], ['late', 'r_late'], ['lateMin', 'r_late_min'], ['lateMax', 'r_late_max'],
         ['early', 'r_early'], ['earlyMin', 'r_early_min'], ['noOut', 'v_noout'], ['lunch', 'r_lunch'], ['lunchOverMin', 'r_lunch_min'], ['absent', 'v_absent'], ['excused', 'r_excused'], ['violations', 'r_total']];
@@ -575,9 +593,10 @@
       const draw = () => {
         const T = v.querySelector('#rT');
         if (mode === 'days') {
-          const list = v.querySelector('#rbad').checked ? rows.filter(r => r.violations) : rows;
-          T.innerHTML = dayHead(true) + `<tbody>${list.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`}</tbody>`;
+          T.innerHTML = dayHead(true) + `<tbody>${rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`}</tbody>`;
+          UI.pager(v.querySelector('#pg'), total, page, size, (p, s2) => { page = p; size = s2; go(true); });
         } else {
+          v.querySelector('#pg').innerHTML = '';
           const list = rows.slice().sort((x, y) => { const a = rval(x, sortK), b = rval(y, sortK); return (a > b ? 1 : a < b ? -1 : 0) * sortD; });
           T.innerHTML = `<thead><tr>${RCOLS.map(([k, l]) => `<th class="sortable" data-k="${k}">${t(l)}${sortK === k ? (sortD < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead>
             <tbody>${list.map(r => `<tr class="${r.violations ? 'bad' : ''}">${RCOLS.map(([k]) => k === 'name' ? `<td><b>${esc(pick(r.employee.name))}</b><small>${esc(pick(r.employee.pos))}</small></td>`
@@ -585,15 +604,21 @@
               : k === 'workedMin' ? `<td class="t">${dur(r.workedMin)}</td>` : `<td class="t">${r[k] ? `<b>${r[k]}</b>` : '<span style="color:var(--mu)">0</span>'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${RCOLS.length}" class="empty">—</td></tr>`}</tbody>`;
         }
       };
-      const go = async () => { rows = await API.admin.report(f()); draw(); };
+      const go = async keep => {
+        if (!keep) page = 1;
+        const r = await API.admin.report(Object.assign(f(), mode === 'days' ? { page, size, onlyBad: v.querySelector('#rbad').checked } : {}));
+        if (mode === 'days') { rows = r.rows; total = r.total; } else rows = r;
+        draw();
+      };
       v.querySelector('#rm').onclick = e => { const b = e.target.closest('[data-m]'); if (!b) return; mode = b.dataset.m;
         v.querySelectorAll('#rm [data-m]').forEach(x => x.classList.toggle('on', x === b)); v.querySelector('#rbadw').style.display = mode === 'days' ? '' : 'none'; go(); };
-      v.querySelector('#rbad').onchange = draw;
+      v.querySelector('#rbad').onchange = () => go();
       v.querySelector('#rT').addEventListener('click', e => { const th = e.target.closest('[data-k]'); if (!th) return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = -1; } draw(); });
       v.querySelector('#rgo').onclick = go;
-      v.querySelector('#rcsv').onclick = async () => { if (!rows.length) await go();
-        if (mode === 'days') UI.download(`zvit_${f().from}_${f().to}.csv`, UI.csv([[t('c_date'), t('c_tab'), t('c_name'), t('c_branch'), t('first_in'), t('last_out'), t('c_lunch'), t('worked'), t('c_viol')],
-          ...rows.map(d => [d.day, d.employee.tab, pick(d.employee.name), pick(d.employee.branch) || '', d.arrival || '', d.leave || '', lunchTxt(d), dur(d.workedMin), violText(d)])]));
+      v.querySelector('#rcsv').onclick = async () => {
+        if (mode === 'days') { const all = (await API.admin.report(Object.assign(f(), { onlyBad: v.querySelector('#rbad').checked }))).rows;
+          UI.download(`zvit_${f().from}_${f().to}.csv`, UI.csv([[t('c_date'), t('c_tab'), t('c_name'), t('c_branch'), t('first_in'), t('last_out'), t('c_lunch'), t('worked'), t('c_viol')],
+          ...all.map(d => [d.day, d.employee.tab, pick(d.employee.name), pick(d.employee.branch) || '', d.arrival || '', d.leave || '', lunchTxt(d), dur(d.workedMin), violText(d)])])); }
         else UI.download(`reiting_${f().from}_${f().to}.csv`, UI.csv([RCOLS.map(([, l]) => t(l)), ...rows.map(r => RCOLS.map(([k]) => k === 'workedMin' ? dur(r.workedMin) : rval(r, k)))])); };
       await go();
     }

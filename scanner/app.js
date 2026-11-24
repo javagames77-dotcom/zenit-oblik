@@ -2,12 +2,21 @@
 (function () {
   const C = window.ZA_CONFIG, t = k => I18N.t(k), pick = o => I18N.pick(o), esc = UI.esc;
   const app = document.getElementById('app');
-  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.0.0', PIN = '1234';
+  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.1.0', PIN = '1234';
   UI.theme.set('light');
   const ld = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const sv = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
   let D = ld(DKEY, null);
   let queue = ld(QKEY, []);
+  // поправка к серверному времени: без сети время отметки берем по ней, а не по сбитым часам телефона
+  let OFF = ld('za-scanner-off', 0);
+  const nowIso = () => new Date(Date.now() + (OFF || 0)).toISOString();
+  async function syncTime() {
+    if (!isOnline()) return;
+    try { const t0 = Date.now(); const r = await API.time(); const t1 = Date.now(); OFF = new Date(r.now).getTime() - (t0 + t1) / 2; sv('za-scanner-off', OFF); } catch (e) {}
+  }
+  // кто в коде (без сети показываем хотя бы табельный номер или код пропуска)
+  const qrWho = txt => { const p = String(txt || '').split('.'); if (p[0] !== 'TT1') return ''; return p[1] === 'P' ? `${t('guest_pass')} · ${p[2]}` : (p[1] === 'D' || p[1] === 'S') ? `${t('tab_no')} ${p[2]}` : ''; };
   let event = 'AUTO', eventTimer = null, busy = false, lastText = '', lastAt = 0;
   let stream = null, detector = null, loopId = null, facing = 'user', simOffline = false, battery = null;
   const ICON = {
@@ -142,14 +151,14 @@
     const now = Date.now();
     if (busy || (!force && text === lastText && now - lastAt < 5000)) return;
     lastText = text; lastAt = now; busy = true;
-    const body = { scan_id: API.uuid(), qr: text, event, scanned_at: new Date().toISOString(), offline: false };
+    const body = { scan_id: API.uuid(), qr: text, event, scanned_at: nowIso(), offline: false };
     let res;
-    if (!isOnline()) { body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued' }; }
+    if (!isOnline()) { body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued', who: qrWho(text) }; }
     else {
       try { res = await Promise.race([API.scan(body, D.token), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 3000))]); }
       catch (e) {
         if (e.auth) { D = null; sv(DKEY, null); busy = false; renderReg(); return; }
-        body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued' };
+        body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued', who: qrWho(text) };
       }
     }
     updStatus(); showResult(res); beep(res);
@@ -159,7 +168,13 @@
     if (!isOnline() || !queue.length || !D) return;
     const items = queue.slice();
     for (const b of items) {
-      try { await API.scan(b, D.token); queue = queue.filter(x => x.scan_id !== b.scan_id); sv(QKEY, queue); } catch (e) { break; }
+      try { await API.scan(b, D.token); queue = queue.filter(x => x.scan_id !== b.scan_id); sv(QKEY, queue); }
+      catch (e) {
+        if (e.auth) { D = null; sv(DKEY, null); renderReg(); return; }
+        // нет связи или сбой сервера — пробуем позже; ошибка в самих данных (4xx) — убираем, чтобы не держала очередь
+        if (e.net || !e.status || e.status >= 500 || e.status === 429) break;
+        queue = queue.filter(x => x.scan_id !== b.scan_id); sv(QKEY, queue);
+      }
     }
     updStatus();
   }
@@ -200,7 +215,7 @@
       case 'DUPLICATE': cls = 'r-gr'; icon = `<div class="circ" style="background:#fff">${ICON.q}</div>`;
         body = `<div class="e1">${r.event ? ev : ''}</div>${e ? `<div class="who">${esc(name)}</div>` : ''}<div class="t3">${t('r_dup')}. ${t('r_dup_t')}</div>`; foot = '<span></span>'; break;
       case 'Q': cls = 'r-gr'; icon = `<div class="circ" style="background:#fff">${ICON.q}</div>`;
-        body = `<div class="e1">${event === 'AUTO' ? '' : t('ev_' + event) + ' · '}${hm}</div><div class="who" style="font-size:clamp(30px,4vw,52px)">${t('r_queued')}</div>`; foot = `<span>${t('queue')}: ${queue.length}</span>`; break;
+        body = `<div class="e1">${event === 'AUTO' ? '' : t('ev_' + event) + ' · '}${hm}</div><div class="who" style="font-size:clamp(30px,4vw,52px)">${t('r_queued')}</div>${r.who ? `<div class="t3">${esc(r.who)}</div>` : ''}`; foot = `<span>${t('queue')}: ${queue.length}</span>`; break;
       default: cls = 'r-rd'; icon = `<div class="circ" style="background:#fff">${ICON.er}</div>`;
         body = `<div class="e1">${t('r_bad_ev')}</div><div class="who">${t('r_bad')}</div><div class="t3">${t('r_bad_t')}</div><div class="chip2">${t('r_bad_help')}</div>`; foot = `<span>${t('r_bad_sb')}</span>`;
     }
@@ -231,15 +246,17 @@
   // ---------- фон ----------
   async function ping() {
     if (!D || !isOnline()) return;
+    syncTime();
     try { await API.devicePing(D.token, { queue: queue.length, battery, version: VERSION }); } catch (e) { if (e.auth) { D = null; sv(DKEY, null); renderReg(); } }
   }
   if (navigator.getBattery) navigator.getBattery().then(b => { const u = () => { battery = Math.round(b.level * 100); updStatus(); }; u(); b.addEventListener('levelchange', u); }).catch(() => {});
   if ('wakeLock' in navigator) { const wl = () => navigator.wakeLock.request('screen').catch(() => {}); wl(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wl(); }); }
-  window.addEventListener('online', () => { updStatus(); flush(); });
+  window.addEventListener('online', () => { updStatus(); syncTime(); flush(); });
   window.addEventListener('offline', updStatus);
   setInterval(flush, 10000);
   setInterval(ping, C.PING_SEC * 1000);
   I18N.on(() => { if (D) { stopCam(); renderMain(); } else renderReg(); });
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  syncTime();
   if (D && D.token) { renderMain(); ping(); flush(); } else renderReg();
 })();
