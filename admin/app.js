@@ -6,13 +6,9 @@
   const state = { branchId: 0, feedFilter: 'all', branches: [], lastFeedTop: null, timer: null, user: null };
   UI.theme.init();
 
-  // токен админки хранится отдельно от токена PWA (za-emp) — не путаются даже в одном браузере
   const tokenGet = () => { try { return localStorage.getItem('za-admin-token'); } catch (e) { return null; } };
-  const userGet = () => { try { return JSON.parse(localStorage.getItem('za-admin-user') || 'null'); } catch (e) { return null; } };
-  const tokenSet = (tk, user) => { try { localStorage.setItem('za-admin-token', tk); localStorage.setItem('za-admin-user', JSON.stringify(user || {})); } catch (e) {} };
-  const userSet = user => { try { localStorage.setItem('za-admin-user', JSON.stringify(user || {})); } catch (e) {} };
-  const tokenDrop = () => { try { localStorage.removeItem('za-admin-token'); localStorage.removeItem('za-admin-user'); } catch (e) {} };
-  const nameGet = () => { const u = userGet(); return (u && (u.name || u.login)) || 'admin'; };
+  const tokenSet = (tk, name) => { try { localStorage.setItem('za-admin-token', tk); localStorage.setItem('za-admin-name', name); } catch (e) {} };
+  const nameGet = () => { try { return localStorage.getItem('za-admin-name') || 'admin'; } catch (e) { return 'admin'; } };
 
   const ROUTES = [
     ['today', 'nav_today'], ['punches', 'nav_punches'], ['sb', 'nav_sb'], ['emps', 'nav_emps'],
@@ -27,84 +23,23 @@
   const minAgo = iso => Math.round((Date.now() - new Date(iso)) / 60e3);
 
   // ---------- вход ----------
-  // Светлая карточка со значком «Адмінка» — специально не похожа на тёмный вход PWA.
-  const langSeg = '<div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div>';
-  const errText = err => err && err.net ? t('login_net') : err && err.status === 401 ? t('login_bad') : (err && err.message && !/^HTTP|^auth$/.test(err.message) ? err.message : t('login_bad'));
-
-  function renderLogin(msg) {
-    clearInterval(state.timer);
-    app.innerHTML = `<div class="login"><form class="auth-card" id="lf" autocomplete="on">
-      <div class="ac-top"><span class="brand">${UI.brandHtml('../')}</span>${langSeg}</div>
-      <span class="ac-badge" data-i18n="login_badge"></span>
+  function renderLogin() {
+    app.innerHTML = `<div class="login"><form class="card" id="lf">
+      <div class="brand">${UI.brandHtml('../')}</div>
       <h1 data-i18n="login_title"></h1>
-      <p class="ac-sub" data-i18n="login_sub"></p>
-      <label class="f"><span data-i18n="login"></span><input class="in" id="lu" name="username" autocomplete="section-admin username" autocapitalize="off" spellcheck="false" required></label>
-      <label class="f"><span data-i18n="password"></span><input class="in" id="lp" name="password" type="password" autocomplete="section-admin current-password" required></label>
-      <div class="ac-err" id="le" ${msg ? '' : 'hidden'}>${esc(msg || '')}</div>
-      <button class="btn pri ac-btn" type="submit" id="lb" data-i18n="login_btn"></button>
-      ${API.mock && !API.live('admin.login') ? '<p class="ac-demo" data-i18n="demo_login"></p>' : ''}
-      <p class="ac-foot"><span data-i18n="login_foot"></span></p>
+      <label class="f"><span data-i18n="login"></span><input class="in" id="lu" autocomplete="username" required></label>
+      <label class="f"><span data-i18n="password"></span><input class="in" id="lp" type="password" autocomplete="current-password"></label>
+      <button class="btn pri" type="submit" data-i18n="sign_in"></button>
+      ${API.mock ? '<p data-i18n="demo_login"></p>' : ''}
+      <div class="seg" role="group" aria-label="Мова" style="align-self:flex-start"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div>
     </form></div>`;
     I18N.apply();
-    const lu = document.getElementById('lu'); lu.focus();
     document.getElementById('lf').addEventListener('submit', async e => {
       e.preventDefault();
-      const btn = document.getElementById('lb'), le = document.getElementById('le');
-      btn.disabled = true; btn.textContent = t('login_checking'); le.hidden = true;
-      try {
-        const r = await API.admin.login(lu.value.trim(), document.getElementById('lp').value);
-        tokenSet(r.token, r.user);
-        if (r.user && r.user.must_change) renderPassword(document.getElementById('lp').value); else boot();
-      } catch (err) {
-        le.textContent = errText(err); le.hidden = false;
-        btn.disabled = false; btn.textContent = t('login_btn');
-        document.getElementById('lp').select();
-      }
+      try { const r = await API.admin.login(document.getElementById('lu').value, document.getElementById('lp').value); tokenSet(r.token, r.name); boot(); }
+      catch (err) { UI.toast('Помилка входу / Ошибка входа'); }
     });
   }
-
-  function renderPassword(oldPw) {
-    app.innerHTML = `<div class="login"><form class="auth-card" id="pf">
-      <div class="ac-top"><span class="brand">${UI.brandHtml('../')}</span>${langSeg}</div>
-      <span class="ac-badge" data-i18n="login_badge"></span>
-      <h1 data-i18n="pw_title"></h1>
-      <p class="ac-sub" data-i18n="pw_sub"></p>
-      <input type="text" name="username" autocomplete="section-admin username" value="${esc((userGet() || {}).login || '')}" hidden>
-      ${oldPw ? '' : '<label class="f"><span data-i18n="pw_old"></span><input class="in" id="po" type="password" autocomplete="section-admin current-password" required></label>'}
-      <label class="f"><span data-i18n="pw_new"></span><input class="in" id="pn" type="password" minlength="8" autocomplete="section-admin new-password" required></label>
-      <label class="f"><span data-i18n="pw_new2"></span><input class="in" id="pn2" type="password" minlength="8" autocomplete="section-admin new-password" required></label>
-      <div class="ac-err" id="pe" hidden></div>
-      <button class="btn pri ac-btn" type="submit" id="pb" data-i18n="pw_btn"></button>
-      <p class="ac-foot"><a href="#" id="pcancel" data-i18n="logout"></a></p>
-    </form></div>`;
-    I18N.apply();
-    document.getElementById('pcancel').onclick = e => { e.preventDefault(); logout(); };
-    document.getElementById('pf').addEventListener('submit', async e => {
-      e.preventDefault();
-      const pe = document.getElementById('pe'), pn = document.getElementById('pn').value, pn2 = document.getElementById('pn2').value;
-      const show = m => { pe.textContent = m; pe.hidden = false; };
-      if (pn.length < 8) return show(t('pw_short'));
-      if (pn !== pn2) return show(t('pw_mismatch'));
-      const btn = document.getElementById('pb'); btn.disabled = true;
-      try {
-        const r = await API.admin.password(oldPw || document.getElementById('po').value, pn);
-        userSet(r.user); boot();
-      } catch (err) {
-        if (err.auth) { tokenDrop(); renderLogin(t('session_end')); return; }
-        show(errText(err)); btn.disabled = false;
-      }
-    });
-  }
-
-  async function logout() {
-    try { await API.admin.logout(); } catch (e) {}
-    tokenDrop(); renderLogin();
-  }
-
-  // любой 401 из разделов админки — назад на вход
-  window.addEventListener('unhandledrejection', ev => {
-    if (ev.reason && ev.reason.auth) { ev.preventDefault(); tokenDrop(); renderLogin(t('session_end')); }
-  });
 
   // ---------- каркас ----------
   function shell() {
@@ -115,7 +50,7 @@
         <input class="in" type="search" id="gq" data-i18n-ph="search_emp" aria-label="Пошук">
         <div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div>
         <button class="moon" type="button" id="themeBtn" aria-label="Тема"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></svg></button>
-        <span class="user"><b>${esc(nameGet())}</b> · ${esc(roleTxt())}</span>
+        <span class="user"><b>${esc(nameGet())}</b> · <span data-i18n="admin_role"></span></span>
         <button class="btn" type="button" id="logoutBtn" data-i18n="logout"></button>
       </header>
       ${API.mock ? `<div class="demo-bar"><b data-i18n="demo_mode"></b><span>MOCK · localStorage</span><button type="button" id="resetBtn" data-i18n="reset_demo"></button>
@@ -127,7 +62,7 @@
       </div>`;
     I18N.apply();
     document.getElementById('themeBtn').onclick = () => UI.theme.toggle();
-    document.getElementById('logoutBtn').onclick = logout;
+    document.getElementById('logoutBtn').onclick = () => { try { localStorage.removeItem('za-admin-token'); } catch (e) {} renderLogin(); };
     const rb = document.getElementById('resetBtn');
     if (rb) rb.onclick = async () => { await API.admin.reset(); UI.toast('OK'); render(); };
     document.getElementById('gq').addEventListener('keydown', e => { if (e.key === 'Enter') { location.hash = 'emps?q=' + encodeURIComponent(e.target.value); } });
@@ -588,20 +523,11 @@
   }
 
   // ---------- запуск ----------
-  const roleTxt = () => { const r = (userGet() || {}).role || 'admin'; return { admin: t('admin_role'), sb: 'СБ', manager: I18N.pick({ uk: 'керівник', ru: 'руководитель' }) }[r] || r; };
-  async function boot() {
+  function boot() {
     if (!tokenGet()) { renderLogin(); return; }
-    // токен проверяем на сервере при каждом открытии (продлевает сессию на 30 дней)
-    try { const r = await API.admin.me(); userSet(r.user); }
-    catch (err) {
-      if (err.auth) { tokenDrop(); renderLogin(t('session_end')); return; }
-      // сеть пропала — пускаем с сохранённым пользователем, разделы сами покажут ошибку
-    }
-    const u = userGet();
-    if (u && u.must_change) { renderPassword(); return; }
     shell(); render();
   }
   window.addEventListener('hashchange', () => { if (tokenGet()) render(); });
-  I18N.on(() => { if (!document.querySelector('.hdr')) { const f = document.querySelector('.auth-card'); if (f) I18N.apply(f); return; } shell(); render(); });
+  I18N.on(() => { if (tokenGet()) { shell(); render(); } else renderLogin(); });
   boot();
 })();

@@ -19,11 +19,9 @@
     clear();
     const invite = new URLSearchParams(location.search).get('invite') || '';
     const demo = API.mock ? await API.pendingInvites() : [];
-    app.innerHTML = `<div class="act on-dark">
-      <div class="r1"><span class="kick">${t('emp_kicker')}</span>
+    app.innerHTML = `<div class="act">
+      <div class="r1"><span class="brand">${UI.brandHtml('../')}</span>
         <div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div></div>
-      <div class="act-ico"><img src="../shared/logo.svg" alt="Зеніт-Авто"></div>
-      <div class="act-app">${t('emp_app')}</div>
       <h1>${t('hello')}!</h1>
       <p>${t('act_text')}</p>
       <ol class="steps"><li><em>1</em><div><b>${t('act_step1')}</b><small>${t('act_step1s')}</small></div></li><li><em>2</em><div>${t('act_step2')}</div></li></ol>
@@ -31,7 +29,6 @@
       ${err ? `<div class="hint" style="background:var(--er-bg);color:var(--er)">${t('act_bad')}</div>` : (invite ? '' : `<p>${t('act_need_link')}</p>`)}
       <button class="btn pri big" type="button" id="go">${t('activate')}</button>
       <div class="fine">${t('act_fine')}</div>
-      <div class="act-foot">${t('emp_foot')} <a href="${esc(window.ZA_CONFIG.ADMIN_URL || '../admin/index.html')}">${esc((window.ZA_CONFIG.ADMIN_URL || 'admin').replace(/^https?:\/\//, ''))}</a></div>
       ${demo.length ? `<div class="demo"><b>${t('demo_invites')}:</b>${demo.map(d => `<button class="btn sm" type="button" data-code="${esc(d.code)}">${esc(pick(d.employee.name))} · ${esc(d.code)}</button>`).join('')}</div>` : ''}
     </div>`;
     I18N.apply();
@@ -94,7 +91,7 @@
         else if (l && l.event === 'BREAK_OUT') { st.className = 'stat br'; st.textContent = `${t('on_break')} ${I18N.hm(l.scannedAt)}`; }
         else { st.className = 'stat off'; st.textContent = t('not_at_work'); }
         S.employee = r.employee; saveS();
-      } catch (err) { if (err.auth) { S = null; saveS(); renderActivate(); } }
+      } catch (err) { if (err.message === 'auth') { S = null; saveS(); renderActivate(); } }
     };
     status(); timers.push(setInterval(status, 5000));
   }

@@ -60,7 +60,7 @@
       return () => [...root.querySelectorAll('[data-of]:checked')].map(x => +x.value);
     },
     brandHtml(prefix) {
-      return `<img src="${prefix}shared/logo.svg" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span>`;
+      return `<img src="${prefix}shared/logo.png" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span>`;
     }
   };
   window.UI = UI;
