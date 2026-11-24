@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<title>Тимчасова перепустка — Зеніт-Авто</title>
+<link rel="icon" href="../shared/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&family=PT+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/ui.css">
+<style>
+#app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+.abar{padding:calc(10px + env(safe-area-inset-top)) 18px 10px;background:var(--card);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.abar .brand img{height:30px}.abar .wm{font-size:17px}
+.scr{padding:16px 18px 28px;display:flex;flex-direction:column;gap:14px}
+.tag{align-self:flex-start;background:#E4ECFD;color:#2350B8;font-weight:800;border-radius:999px;padding:6px 12px;font-size:14px}
+.qrc{background:var(--card);border-radius:20px;padding:20px;border:1px solid var(--bd);display:flex;flex-direction:column;align-items:center;gap:14px}
+.qrc .nm{text-align:center}.qrc .nm b{display:block;font-size:22px;font-weight:800;line-height:1.2}.qrc .nm span{font-size:14px;color:var(--mu)}
+.qrbox{width:min(290px,78vw);padding:12px;border:2px solid #2F5BD3;border-radius:14px;background:#fff}.qrbox svg{display:block;width:100%;height:auto}
+.bar{width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}.bar div{height:6px;background:#2F5BD3;transition:width 1s linear}
+.row{width:100%;display:flex;justify-content:space-between;font-size:13px;color:var(--mu);margin-top:-6px}
+.kv{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px 16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;font-size:15px}
+.kv span:nth-child(odd){color:var(--mu)}
+.hint{background:#E4ECFD;color:#1E3F8F;border-radius:14px;padding:12px 14px;font-size:14px}
+.bad{background:var(--er-bg);color:var(--er);border-radius:14px;padding:16px;font-weight:700}
+</style>
+</head>
+<body>
+<div id="app"><header class="abar"><span class="brand"><img src="../shared/logo.svg" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span></span>
+  <div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div></header>
+  <main class="scr" id="scr"></main></div>
+<script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
+<script src="../shared/vendor/qrcode.js"></script>
+<script src="../shared/ui.js"></script>
+<script src="../shared/api.js"></script>
+<script>
+{
+  const C = window.ZA_CONFIG, t = k => I18N.t(k), pick = o => I18N.pick(o), esc = UI.esc;
+  const code = new URLSearchParams(location.search).get('p');
+  const v = document.getElementById('scr');
+  let P = null, offset = 0, ts = 0, timer = null;
+  const now = () => Math.floor((Date.now() + offset) / 1000);
+  const dt = iso => `${new Date(iso).toLocaleDateString('uk-UA').slice(0, 5)} ${I18N.hm(iso)}`;
+  async function draw() {
+    ts = now();
+    const box = document.getElementById('qr'); if (!box) return;
+    box.innerHTML = UI.qrSvg(await API.makePassCode(P.secret, P.code, ts), { margin: 1 });
+  }
+  function tick() {
+    if (new Date(P.to) < new Date()) { render(); return; }
+    let left = C.QR_REFRESH_SEC - (now() - ts); if (left <= 0) { draw(); left = C.QR_REFRESH_SEC; }
+    const ql = document.getElementById('ql'); if (!ql) return;
+    ql.textContent = `${t('code_refresh')} ${left} ${t('sec')}`;
+    document.getElementById('qb').style.width = (100 * left / C.QR_REFRESH_SEC) + '%';
+  }
+  function render() {
+    clearInterval(timer); I18N.apply();
+    if (!P) { v.innerHTML = `<div class="bad">${t('pp_notfound')}</div>`; return; }
+    const ok = P.status === 'active' && new Date(P.to) > new Date();
+    v.innerHTML = `<span class="tag">${t('guest_pass')}</span>
+      ${ok ? `<div class="qrc"><div class="nm"><b>${esc(P.name)}</b><span>${esc(P.company)}</span></div><div class="qrbox" id="qr" role="img" aria-label="QR"></div>
+        <div class="bar"><div id="qb" style="width:100%"></div></div><div class="row"><span id="ql"></span><span class="mono">${esc(P.code)}</span></div></div>
+        <div class="hint">${t('pp_show')}</div>` : `<div class="bad">${t('pp_bad')}<br><span style="font-weight:500">${t('st_' + P.status)}</span></div>`}
+      <div class="kv"><span>${t('pp_where')}</span><span>${P.places.map(x => `${esc(pick(x.branch))} · ${esc(pick(x.gate))}`).join('<br>')}</span>
+        <span>${t('pp_valid')}</span><span><b>${dt(P.from)} → ${dt(P.to)}</b></span>
+        ${P.maxUses ? `<span>${t('p_uses')}</span><span>${P.uses} / ${P.maxUses}</span>` : ''}</div>`;
+    if (ok) { draw().then(tick); timer = setInterval(tick, 1000); if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(() => {}); }
+  }
+  I18N.on(render);
+  API.passInfo(code).then(r => { P = r; offset = new Date(r.server_time).getTime() - Date.now(); render(); }).catch(() => { P = null; render(); });
+}
+</script>
+</body>
+</html>

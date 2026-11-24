@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Зеніт-Авто">
+<title>Зеніт-Авто.облік</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../shared/icon-192.png">
+<link rel="apple-touch-icon" href="../shared/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&family=PT+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/ui.css">
+<style>
+html,body{height:100%}
+body{background:var(--bg)}
+body:has(.act),#app:has(.act){background:#0d0f13}
+#app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;background:var(--bg)}
+.abar{position:sticky;top:0;z-index:5;padding:calc(10px + env(safe-area-inset-top)) 18px 10px;background:var(--card);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.abar .brand img{height:30px}.abar .wm{font-size:17px}
+.scr{flex:1;padding:14px 18px 20px;display:flex;flex-direction:column;gap:14px}
+.stat{align-self:flex-end;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;padding:5px 10px;border-radius:999px;white-space:nowrap;background:var(--ok-bg);color:var(--ok)}
+.stat.off{background:var(--card);color:var(--mu);border:1px solid var(--bd)}
+.stat.br{background:var(--wa-bg);color:var(--wa)}
+.qrc{background:var(--card);border-radius:20px;padding:20px;border:1px solid var(--bd);display:flex;flex-direction:column;align-items:center;gap:14px}
+.qrc .nm{text-align:center}.qrc .nm b{display:block;font-size:21px;font-weight:800;line-height:1.2}.qrc .nm span{font-size:14px;color:var(--mu)}
+.qrbox{width:min(290px,78vw);padding:12px;border:2px solid var(--or);border-radius:14px;background:#fff}
+.qrbox svg{display:block;width:100%;height:auto}
+.tm{width:100%}
+.bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden}.bar div{height:6px;background:var(--or);border-radius:3px;transition:width 1s linear}
+.tm .row{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--mu)}
+.hint{background:var(--or-soft);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;color:var(--or-ink)}
+.net{background:var(--card);border:1px dashed var(--bd);border-radius:12px;padding:8px 12px;font-size:13px;color:var(--mu)}
+.tabbar{position:sticky;bottom:0;display:flex;border-top:1px solid var(--bd);background:var(--card);padding:4px 8px calc(8px + env(safe-area-inset-bottom))}
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border:0;background:none;color:var(--mu);font-size:12px;font-weight:600}
+.tabbar button.on{color:var(--or-ink)}
+.tabbar i{width:28px;height:4px;border-radius:2px;background:transparent}.tabbar button.on i{background:var(--or)}
+h2.t{margin:0;font-size:24px;font-weight:800}
+.sub{margin:-10px 0 0;font-size:14px;color:var(--mu)}
+.day{background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden}
+.dh{display:flex;justify-content:space-between;gap:8px;padding:11px 14px;border-bottom:1px solid var(--bd)}
+.dh b{font-size:15px}.dh span{font-size:13px;color:var(--mu)}
+.ev{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--bd)}
+.ev:first-of-type{border-top:0}
+.ev b{width:46px;font-variant-numeric:tabular-nums}.ev span{flex:1;font-size:15px}
+/* активация — тёмный крупный экран, специально не похож на светлый вход в админку */
+.act{--ink:#F1F1EF;--mu:#9A9EA6;--bd:#2A2E36;--bg:#171a20;--card:#0d0f13;--or-soft:#2b1c10;--or-ink:#F3A26A;color:var(--ink);color-scheme:dark}
+.act .in{height:54px;font-size:20px;background:#171a20;border-color:#2A2E36;color:#fff;letter-spacing:.06em}
+.act .kick{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--or)}
+.act-ico{width:84px;height:84px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;margin-top:8px}
+.act-ico img{height:64px}
+.act-app{font-size:15px;font-weight:700;color:var(--mu);margin-top:-4px}
+.act .btn.pri{color:#111318}
+.act-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--bd);font-size:13px;line-height:1.5;color:var(--mu)}
+.act-foot a{color:var(--or-ink)}
+.act{background:var(--card);flex:1;padding:calc(24px + env(safe-area-inset-top)) 22px 28px;display:flex;flex-direction:column;gap:16px}
+.act .r1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.act h1{margin:6px 0 0;font-size:28px;line-height:1.15;font-weight:800}
+.act p{margin:0;color:var(--mu)}
+.emp{background:var(--bg);border-radius:16px;padding:14px 16px;font-size:14px;color:var(--mu)}.emp b{display:block;font-size:16px;color:var(--ink)}
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.45}
+.steps li{display:flex;gap:12px}
+.steps em{flex:none;width:28px;height:28px;border-radius:50%;background:var(--or);color:#1B1B1B;font-weight:800;font-size:14px;font-style:normal;display:flex;align-items:center;justify-content:center}
+.steps small{display:block;color:var(--mu);font-size:14px}
+.big{height:54px;font-size:17px;width:100%}
+.fine{font-size:13px;color:var(--mu);text-align:center}
+.demo{border:1px dashed var(--or);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;font-size:15px}.kv span:nth-child(odd){color:var(--mu)}
+.card.p{padding:16px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
+<script src="../shared/vendor/qrcode.js"></script>
+<script src="../shared/ui.js"></script>
+<script src="../shared/api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
