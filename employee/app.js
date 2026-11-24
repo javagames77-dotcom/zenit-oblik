@@ -63,7 +63,7 @@
         const r = await API.activate(code);
         S = { secret: r.qr_secret, token: r.api_token, employee: r.employee, offset: new Date(r.server_time).getTime() - Date.now(), syncedAt: Date.now() };
         saveS(); history.replaceState(null, '', location.pathname); tab = 'code'; renderMain();
-      } catch (e) { renderActivate(true); }
+      } catch (e) { console.error(e); renderActivate(true); }
     };
     document.getElementById('go').onclick = () => go(document.getElementById('inv').value);
     app.querySelectorAll('[data-code]').forEach(b => b.onclick = () => go(b.dataset.code));
@@ -79,18 +79,67 @@
     ({ code: viewCode, hist: viewHist, prof: viewProf })[tab](document.getElementById('scr'));
   }
 
+  // ---------- выбор события ----------
+  const PICK = ['IN', 'BREAK_OUT', 'BREAK_IN', 'DUTY_OUT', 'DUTY_IN', 'OUT'];
+  let day = { last: null, today: [] }, choice = null;
+  const lastKey = () => (day.last ? day.last.id || day.last.scannedAt : '');
+  const curEv = () => (choice ? choice.ev : suggest());
+  const hmNow = () => { const d = new Date(nowSrv() * 1000); return d.getHours() * 60 + d.getMinutes(); };
+  const toMin = x => { const [h, m] = String(x).split(':'); return +h * 60 + (+m || 0); };
+  const inLunch = () => hmNow() >= toMin(C.LUNCH_FROM || '11:00') && hmNow() < toMin(C.LUNCH_TO || '13:00');
+  const state = () => { const l = day.last && day.last.event; return !l || l === 'OUT' ? 'off' : l === 'BREAK_OUT' ? 'break' : l === 'DUTY_OUT' ? 'duty' : 'work'; };
+  function suggest() {
+    const st = state();
+    if (st === 'off') return 'IN';
+    if (st === 'break') return 'BREAK_IN';
+    if (st === 'duty') return 'DUTY_IN';
+    return inLunch() && !day.today.includes('BREAK_OUT') ? 'BREAK_OUT' : 'OUT';
+  }
+  // почему выбор выглядит странно (пусто — всё нормально)
+  function doubt(k) {
+    const st = state(), since = day.last ? I18N.hm(day.last.scannedAt) : '';
+    if (st === 'off' && k !== 'IN') return t('pk_r_off');
+    if (st === 'work' && k === 'IN') return `${t('pk_r_atwork')} ${since}.`;
+    if (st === 'work' && (k === 'BREAK_IN' || k === 'DUTY_IN')) return `${t('pk_r_atwork')} ${since}.`;
+    if (st === 'break' && k !== 'BREAK_IN') return `${t('pk_r_break')} ${since}.`;
+    if (st === 'duty' && k !== 'DUTY_IN') return `${t('pk_r_duty')} ${since}.`;
+    if (k === 'BREAK_OUT' && day.today.includes('BREAK_OUT')) return t('pk_r_lunchdone');
+    if (k === 'BREAK_OUT' && !inLunch()) { const d = new Date(nowSrv() * 1000); return `${t('pk_now')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}. ${t('pk_r_lunchtime')} ${C.LUNCH_FROM}–${C.LUNCH_TO}.`; }
+    return '';
+  }
+
   async function viewCode(v) {
     const e = S.employee;
     v.innerHTML = `<span class="stat off" id="st">…</span>
+      <div class="pick"><div class="pick-h">${t('pk_title')}</div><div class="pick-g" id="pk">${PICK.map(k => `<button type="button" data-ev="${k}">${t('pk_' + k)}<small>${t('pk_auto')}</small></button>`).join('')}</div></div>
       <div class="qrc"><div class="nm"><b>${esc(pick(e.name))}</b><span>${t('tab_no')} ${esc(e.tab)} · ${esc(pick(e.pos))} · ${esc(pick(e.branch))}</span></div>
         <div class="qrbox" id="qr" role="img" aria-label="QR"></div>
         <div class="tm"><div class="bar"><div id="qb" style="width:100%"></div></div><div class="row"><span id="ql"></span><span class="mono" id="qn"></span></div></div></div>
       <div class="hint">${t('code_hint')}</div>
       <div class="net hidden" id="net">${t('offline_note')}</div>`;
     let ts = 0;
+    // ---- выбор события: подсказка по времени и последней отметке, сотрудник может сменить ----
+    const paint = () => {
+      const auto = suggest();
+      v.querySelectorAll('#pk [data-ev]').forEach(b => { b.classList.toggle('on', b.dataset.ev === curEv()); b.classList.toggle('auto', b.dataset.ev === auto); });
+    };
+    v.querySelector('#pk').onclick = ev => {
+      const b = ev.target.closest('[data-ev]'); if (!b) return;
+      const k = b.dataset.ev; if (k === curEv()) return;
+      const why = doubt(k);
+      const apply = () => { choice = { ev: k, at: Date.now(), last: lastKey() }; paint(); draw(); };
+      if (!why) return apply();
+      const auto = suggest();
+      UI.modal(`<h2>${t('pk_sure')}</h2><p>${t('pk_chose')} <b>«${t('pk_' + k)}»</b>. ${why}</p>
+        <div class="acts" style="flex-direction:column;align-items:stretch"><button class="btn pri big" type="button" id="pkno">${t('pk_back')} «${t('pk_' + auto)}»</button>
+        <button class="btn big" type="button" id="pkyes">${t('pk_yes')}</button></div>`, (m, close) => {
+        m.querySelector('#pkno').onclick = () => { choice = null; close(); paint(); draw(); };
+        m.querySelector('#pkyes').onclick = () => { close(); apply(); };
+      });
+    };
     const draw = async () => {
       ts = nowSrv();
-      const code = await API.makeLiveCode(S.secret, e.tab, ts);
+      const code = await API.makeLiveCode(S.secret, e.tab, ts, curEv());
       const box = document.getElementById('qr'); if (!box) return;
       box.innerHTML = UI.qrSvg(code, { ecc: 'M', margin: 1 });
       document.getElementById('qn').textContent = '№ ' + String(ts).slice(-4);
@@ -112,6 +161,9 @@
       try {
         const r = await API.me(S.token); const st = document.getElementById('st'); if (!st) return;
         const l = r.last;
+        const before = curEv(); day = { last: l, today: r.today || [] };
+        if (choice && (choice.last !== lastKey() || Date.now() - choice.at > 10 * 60e3)) choice = null; // отметились или прошло 10 минут — снова подсказка
+        paint(); if (curEv() !== before) draw();
         if (l && API.IN_SET.includes(l.event)) { st.className = 'stat'; st.innerHTML = `<span class="dot"></span>${t('at_work_since')} ${I18N.hm(l.scannedAt)}`; }
         else if (l && l.event === 'BREAK_OUT') { st.className = 'stat br'; st.textContent = `${t('on_break')} ${I18N.hm(l.scannedAt)}`; }
         else { st.className = 'stat off'; st.textContent = t('not_at_work'); }

@@ -35,9 +35,14 @@
     return `TT1.P.${code}.${ts}.${await hmac16(secret, `P.${code}.${ts}`)}`;
   }
   // Код для экрана «Мой код» (считается на телефоне, работает без сети)
-  async function makeLiveCode(secret, tab, ts) {
+  // Живой код сотрудника. С выбранным событием: TT1.D.<таб>.<время>.<событие>.<подпись>
+  const EV_CODE = { IN: 'I', OUT: 'O', BREAK_OUT: 'BO', BREAK_IN: 'BI', DUTY_OUT: 'DO', DUTY_IN: 'DI' };
+  const EV_FROM = Object.fromEntries(Object.entries(EV_CODE).map(([k, v]) => [v, k]));
+  async function makeLiveCode(secret, tab, ts, ev) {
     ts = ts || nowS();
-    return `TT1.D.${tab}.${ts}.${await hmac16(secret, `D.${tab}.${ts}`)}`;
+    const c = ev && EV_CODE[ev];
+    return c ? `TT1.D.${tab}.${ts}.${c}.${await hmac16(secret, `D.${tab}.${ts}.${c}`)}`
+             : `TT1.D.${tab}.${ts}.${await hmac16(secret, `D.${tab}.${ts}`)}`;
   }
 
   // ---------- демо-данные ----------
@@ -255,9 +260,9 @@
     },
     async me(token) {
       await sleep(120); const s = fresh(); const e = s.employees.find(x => x.id === s.tokens[token]);
-      if (!e || !e.active) throw new Error('auth');
+      if (!e || !e.active) { const er = new Error('auth'); er.auth = true; throw er; }
       const today = s.punches.filter(p => p.empId === e.id && p.accepted && isToday(p.scannedAt));
-      return { employee: empPublic(e, s), last: today.pop() || null };
+      return { employee: empPublic(e, s), today: today.map(p => p.event), last: today.pop() || null };
     },
     async myEvents(token) {
       await sleep(200); const s = fresh(); const id = s.tokens[token];
@@ -295,15 +300,18 @@
         s.punches.push({ id: body.scan_id, empId: emp ? emp.id : null, deviceId: d.id, gateId: d.gateId, event: null, verdict: 'INVALID', accepted: false, codeKind: null, codeTs: null, codeAge: null, scannedAt, receivedAt: new Date().toISOString(), offline: !!body.offline, checked: false, raw });
         save(); return { status: 'rejected', verdict: 'INVALID', employee: emp ? empPublic(emp, s) : null };
       };
-      const parts = String(body.qr || '').trim().split('.');
-      if (parts.length !== 5 || parts[0] !== 'TT1') return reject(body.qr);
+      let parts = String(body.qr || '').trim().split('.'), qev = null, msg = null;
+      if (parts.length === 6 && parts[0] === 'TT1' && parts[1] === 'D') {
+        qev = EV_FROM[parts[4]] || 'BAD'; msg = `D.${parts[2]}.${parts[3]}.${parts[4]}`; parts = [parts[0], parts[1], parts[2], parts[3], parts[5]];
+      }
+      if (parts.length !== 5 || parts[0] !== 'TT1' || qev === 'BAD') return reject(body.qr);
       const [, kind, tab, n, sig] = parts;
       if (kind === 'P') return scanPass(s, d, body, scannedAt, scanS, tab, n, sig);
       const e = s.employees.find(x => x.tab === tab);
       if (!e || !e.active) return reject(body.qr, e);
       let verdict, codeTs = null, age = null;
       if (kind === 'D') {
-        if (!e.secret || sig !== await hmac16(e.secret, `D.${tab}.${n}`)) return reject(body.qr, e);
+        if (!e.secret || sig !== await hmac16(e.secret, msg || `D.${tab}.${n}`)) return reject(body.qr, e);
         codeTs = +n; age = scanS - codeTs;
       } else if (kind === 'S') {
         if (+n !== e.staticVer || sig !== await hmac16(s.staticKey, `S.${tab}.${n}`)) return reject(body.qr, e);
@@ -315,7 +323,7 @@
       else verdict = 'STATIC';
       const codeVerdict = verdict;
       if (!accessMap(s, e)[d.gateId].allowed) verdict = 'NO_ACCESS';
-      const event = !body.event || body.event === 'AUTO' ? nextEvent(s, e.id) : body.event;
+      const event = qev || (!body.event || body.event === 'AUTO' ? nextEvent(s, e.id) : body.event);
       s.punches.push({ id: body.scan_id, empId: e.id, deviceId: d.id, gateId: d.gateId, event, verdict, codeVerdict, accepted: true, codeKind: kind, codeTs, codeAge: age, scannedAt, receivedAt: new Date().toISOString(), offline: !!body.offline, checked: false });
       save();
       return { status: 'accepted', verdict, code_verdict: codeVerdict, event, code_age_sec: age, employee: empPublic(e, s) };

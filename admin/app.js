@@ -123,7 +123,7 @@
         <a href="../employee/index.html" target="_blank">PWA</a><a href="../scanner/index.html" target="_blank">Scanner</a></div>` : ''}
       <div class="layout">
         <nav class="side" aria-label="Меню">${ROUTES.map(([r, k]) => `<a class="si" href="#${r}" data-r="${r}"><span data-i18n="${k}"></span>${r === 'sb' ? '<span class="b p-wa" id="sbBadge"></span>' : ''}${r === 'devices' ? '<span class="b p-er" id="devBadge"></span>' : ''}</a>`).join('')}
-          <div class="ver"><span data-i18n="version"></span> 1.1</div></nav>
+          <div class="ver"><span data-i18n="version"></span> 1.2</div></nav>
         <main class="main" id="view"></main>
       </div>`;
     I18N.apply();
