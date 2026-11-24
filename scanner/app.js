@@ -23,12 +23,14 @@
     stopCam();
     app.innerHTML = `<div class="reg"><form class="card" id="rf">
       <span class="brand">${UI.brandHtml('../')}</span>
+      <span class="reg-badge">${t('scan_badge')}</span>
       <h1>${t('reg_title')}</h1><p>${t('reg_enter')}</p>
       <input class="in code mono" id="rc" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="${t('reg_code')}">
       ${err ? `<p style="color:var(--er)">${t('reg_bad')}</p>` : ''}
       <button class="btn pri" style="height:54px;font-size:17px" type="submit">${t('reg_btn')}</button>
       ${API.mock ? '<p>Демо-код: <b class="mono">482915</b> (або створіть новий в адмінці)</p>' : ''}
       <div class="seg" role="group" aria-label="Мова" style="align-self:flex-start"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div>
+      <p class="reg-foot">${t('scan_foot')}</p>
     </form></div>`;
     I18N.apply();
     document.getElementById('rf').onsubmit = async e => {
@@ -146,7 +148,7 @@
     else {
       try { res = await Promise.race([API.scan(body, D.token), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 3000))]); }
       catch (e) {
-        if (e.message === 'auth') { D = null; sv(DKEY, null); busy = false; renderReg(); return; }
+        if (e.auth) { D = null; sv(DKEY, null); busy = false; renderReg(); return; }
         body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued' };
       }
     }
@@ -229,7 +231,7 @@
   // ---------- фон ----------
   async function ping() {
     if (!D || !isOnline()) return;
-    try { await API.devicePing(D.token, { queue: queue.length, battery, version: VERSION }); } catch (e) { if (e.message === 'auth') { D = null; sv(DKEY, null); renderReg(); } }
+    try { await API.devicePing(D.token, { queue: queue.length, battery, version: VERSION }); } catch (e) { if (e.auth) { D = null; sv(DKEY, null); renderReg(); } }
   }
   if (navigator.getBattery) navigator.getBattery().then(b => { const u = () => { battery = Math.round(b.level * 100); updStatus(); }; u(); b.addEventListener('levelchange', u); }).catch(() => {});
   if ('wakeLock' in navigator) { const wl = () => navigator.wakeLock.request('screen').catch(() => {}); wl(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wl(); }); }

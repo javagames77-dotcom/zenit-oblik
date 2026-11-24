@@ -72,10 +72,21 @@ tr.new td{animation:flash 2s ease-out}
 .bc ul{margin:0 0 12px;padding:0;list-style:none}
 .bc li{padding:8px 0;border-top:1px solid var(--bd);display:flex;justify-content:space-between;gap:8px;font-size:15px}
 .code-big{font-size:44px;font-weight:800;letter-spacing:.12em;text-align:center;padding:14px;background:var(--bg);border-radius:14px;margin:10px 0}
-.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
-.login .card{width:min(420px,100%);padding:28px;display:flex;flex-direction:column;gap:14px}
-.login h1{margin:8px 0 0;font-size:26px}
-.login p{margin:0;color:var(--mu);font-size:14px}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:#f7f7f8}
+/* вход в админку всегда светлый — чтобы не путать с тёмным входом PWA */
+.auth-card{width:min(400px,100%);background:#fff;color:#111318;border:1px solid #e6e6ea;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 30px rgba(17,19,24,.06);
+  --ink:#111318;--mu:#6b6f78;--bd:#e2e3e7;--bg:#f7f7f8;--card:#fff;color-scheme:light}
+.ac-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.auth-card .brand img{background:none;padding:0;height:34px}
+.ac-badge{align-self:flex-start;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:#111318;color:#fff;padding:5px 10px;border-radius:6px;margin-top:6px}
+.auth-card h1{margin:0;font-size:24px;line-height:1.2}
+.ac-sub{margin:-6px 0 4px;color:var(--mu);font-size:14px;line-height:1.45}
+.auth-card .in{background:#fff;color:#111318}
+.ac-btn{height:48px;font-size:16px}
+.ac-err{background:#fdecea;color:#b3261e;border-radius:10px;padding:10px 12px;font-size:14px}
+.ac-demo{margin:0;font-size:13px;color:var(--mu)}
+.ac-foot{margin:6px 0 0;padding-top:14px;border-top:1px solid var(--bd);font-size:13px;line-height:1.45;color:var(--mu)}
+.ac-foot a{color:inherit}
 @media(max-width:900px){
   .layout{flex-direction:column}
   .side{width:auto;flex-direction:row;overflow-x:auto;padding:8px 12px;border-right:0;border-bottom:1px solid var(--bd)}
@@ -97,7 +108,11 @@ tr.new td{animation:flash 2s ease-out}
 .accg{display:flex;align-items:center;gap:10px;padding:6px 0;flex-wrap:wrap}
 .accg .gn{flex:1;min-width:90px;font-size:15px}
 .accg .pill{font-size:12px}
-@media print{.hdr,.side,.demo-bar,.noprint{display:none!important}.main{padding:0}}
+.main.is-demo{outline:2px dashed var(--or);outline-offset:-10px;border-radius:14px}
+.demo-tag{display:inline-block;align-self:flex-start;width:max-content;margin-bottom:12px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--or-ink);border:1.5px dashed var(--or);border-radius:6px;padding:4px 9px}
+.si.is-demo{outline:1.5px dashed var(--or);outline-offset:-3px}
+.demo-route .modal{outline:2px dashed var(--or);outline-offset:-6px}
+@media print{.demo-tag{display:none}.main.is-demo{outline:0}.hdr,.side,.demo-bar,.noprint{display:none!important}.main{padding:0}}
 </style>
 </head>
 <body>

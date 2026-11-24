@@ -17,32 +17,19 @@ h1{font-size:clamp(28px,4vw,40px);line-height:1.1;margin:28px 0 8px;font-weight:
 .app:hover{border-color:var(--or)}
 .app h2{margin:0;font-size:21px}.app p{margin:0;color:var(--mu);font-size:15px}
 .app .btn{align-self:flex-start;margin-top:auto}
-ol{padding-left:20px;line-height:1.7}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><span class="brand"><img src="shared/logo.png" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span></span></div>
-  <h1>Облік робочого часу — фронт, етап 1</h1>
-  <p class="lead">Три застосунки. Поки що з заглушкою замість n8n: дані зберігаються в цьому браузері й спільні для всіх трьох вкладок.</p>
+  <div class="top"><span class="brand"><img src="shared/logo.svg" alt="Зеніт-Авто"><span class="wm">Зеніт-Авто<span>.облік</span></span></span></div>
+  <h1>Облік робочого часу</h1>
+  <p class="lead">Оберіть, куди вам потрібно.</p>
   <div class="grid">
-    <a class="card app" href="admin/index.html" target="_blank"><h2>Адмінка</h2><p>Сьогодні, відмітки, СБ, працівники, доступи, тимчасові перепустки, філії, сканери, звіти.</p><span class="btn pri">Відкрити</span></a>
-    <a class="card app" href="employee/index.html" target="_blank"><h2>PWA працівника</h2><p>Активація, живий QR, мої відмітки, профіль. Відкривайте у вузькому вікні або на телефоні.</p><span class="btn pri">Відкрити</span></a>
-    <a class="card app" href="scanner/index.html" target="_blank"><h2>PWA-сканер</h2><p>Камера, USB-сканер, вибір події, черга без мережі. Демо-код підключення: 482915.</p><span class="btn pri">Відкрити</span></a>
+    <a class="card app" href="admin/index.html"><h2>Адмінка</h2><p>Для відділу кадрів, служби безпеки й керівників. Відкривайте на комп’ютері.</p><span class="btn pri">Відкрити</span></a>
+    <a class="card app" href="employee/index.html"><h2>Застосунок працівника</h2><p>Код для прохідної. Посилання для активації дає адміністратор.</p><span class="btn pri">Відкрити</span></a>
+    <a class="card app" href="scanner/index.html"><h2>Сканер прохідної</h2><p>Телефон на прохідній. Код підключення — в адмінці, розділ «Сканери».</p><span class="btn pri">Відкрити</span></a>
   </div>
-  <h2 style="margin-top:36px">Як перевірити наскрізний сценарій</h2>
-  <ol>
-    <li>Адмінка → вхід з будь-яким логіном.</li>
-    <li>PWA працівника → «Демо: активувати як Пуль Олена».</li>
-    <li>Сканер → код 482915 → наведіть камеру на QR з телефона або натисніть кнопки демо-панелі.</li>
-    <li>Адмінка → «Сьогодні»: відмітка з’явиться в стрічці за кілька секунд; скрин і підробка — у «Служба безпеки».</li>
-    <li>Доступи: «Працівники» → кнопка «Доступ» у рядку або виберіть кількох і «Відкрити/Закрити доступ». У сканері — кнопка «чужу філію».</li>
-    <li>Перепустки: «Перепустки» → «Видати перепустку» → відкрийте посилання (сторінка гостя). У сканері — «перепустку гостя» та «прострочену перепустку».</li>
-  </ol>
 </div>
-<script src="shared/config.js"></script>
-<script src="shared/i18n.js"></script>
-<script>I18N.apply();</script>
 </body>
 </html>

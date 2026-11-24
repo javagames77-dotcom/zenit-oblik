@@ -11,17 +11,20 @@
   const b64u = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const fromB64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
   const randBytes = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return a; };
-  async function hmac16(secretB64u, msg) {
+  // Подпись совместима с нодой Crypto в n8n: HMAC-SHA256, ключ = строка секрета (UTF-8),
+  // результат = первые 32 hex-символа (16 байт).
+  const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  async function hmac16(secret, msg) {
     if (crypto.subtle) {
-      const k = await crypto.subtle.importKey('raw', fromB64u(secretB64u), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const k = await crypto.subtle.importKey('raw', te.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
       const s = new Uint8Array(await crypto.subtle.sign('HMAC', k, te.encode(msg)));
-      return b64u(s.slice(0, 16));
+      return hex(s.slice(0, 16));
     }
     // запасной вариант без WebCrypto (страница открыта не по HTTPS): только для демо
-    let h1 = 2166136261, h2 = 5381; const str = secretB64u + '|' + msg;
+    let h1 = 2166136261, h2 = 5381; const str = secret + '|' + msg;
     for (let i = 0; i < str.length; i++) { h1 = Math.imul(h1 ^ str.charCodeAt(i), 16777619); h2 = Math.imul(h2, 33) ^ str.charCodeAt(i); }
     const out = new Uint8Array(16); for (let i = 0; i < 16; i++) out[i] = ((i % 2 ? h1 : h2) >>> ((i % 4) * 8)) & 255;
-    return b64u(out);
+    return hex(out);
   }
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : b64u(randBytes(16)));
   const nowS = () => Math.floor(Date.now() / 1000);
@@ -216,13 +219,14 @@
     };
     if (!p || sig !== await hmac16(p.secret, `P.${code}.${n}`)) return deny('invalid');
     const st = passStatus(p);
-    if (st !== 'active') return deny(st, p);
+    const evNext = !body.event || body.event === 'AUTO' ? nextEvent(s, null, p.id) : body.event;
+    if (st !== 'active' && !(st === 'used' && evNext !== 'IN')) return deny(st, p);   // по исчерпанному пропуску можно выйти
     if (!p.gateIds.includes(d.gateId)) return deny('gate', p);
     const dup = s.punches.slice().reverse().find(x => x.passId === p.id && x.deviceId === d.id && x.accepted);
     if (dup && scanS - new Date(dup.scannedAt).getTime() / 1000 < C.DUP_WINDOW_SEC) return { status: 'duplicate', verdict: 'DUPLICATE', pass: passPublic(s, p) };
     const age = scanS - (+n);
     const verdict = Math.abs(age) <= C.QR_TTL_SEC ? 'PASS_OK' : 'PASS_SCREEN';
-    const event = !body.event || body.event === 'AUTO' ? nextEvent(s, null, p.id) : body.event;
+    const event = evNext;
     if (event === 'IN') p.uses++;
     s.punches.push({ id: body.scan_id, empId: null, passId: p.id, deviceId: d.id, gateId: d.gateId, event, verdict, accepted: true, codeKind: 'P', codeTs: +n, codeAge: age, scannedAt, receivedAt: new Date().toISOString(), offline: !!body.offline, checked: false });
     save();
@@ -326,7 +330,14 @@
 
     // админка
     admin: {
-      async login(user, pass) { await sleep(250); const s = fresh(); s.adminToken = b64u(randBytes(16)); s.adminName = user || 'admin'; save(); return { token: s.adminToken, name: user || 'admin' }; },
+      async login(login, password) {
+        await sleep(250); const s = fresh(); s.adminToken = b64u(randBytes(16));
+        s.adminUser = { id: 1, login: login || 'admin', name: login || 'admin', role: 'admin', lang: 'uk', must_change: false }; save();
+        return { success: true, token: s.adminToken, user: s.adminUser };
+      },
+      async me() { const s = fresh(); return { success: true, user: s.adminUser || { id: 1, login: 'admin', name: 'admin', role: 'admin', must_change: false } }; },
+      async logout() { const s = fresh(); s.adminToken = null; save(); return { success: true }; },
+      async password(oldP, newP) { const s = fresh(); if (s.adminUser) s.adminUser.must_change = false; save(); return { success: true, user: s.adminUser }; },
       async dashboard(branchId) {
         await sleep(150); const s = fresh();
         const emps = s.employees.filter(e => e.active && (!branchId || e.branchId === branchId));
@@ -462,7 +473,7 @@
           if (!p) return 'TT1.P.NONE.0.x';
           return makePassCode(p.secret, p.code, nowS());
         }
-        if (kind === 'fake') return `TT1.D.${e.tab}.${nowS()}.AAAAAAAAAAAAAAAAAAAAAA`;
+        if (kind === 'fake') return `TT1.D.${e.tab}.${nowS()}.00000000000000000000000000000000`;
         if (kind === 'static') return (await MOCK.admin.staticCode(e.id)).qr;
         if (!e.secret) return `TT1.D.${e.tab}.${nowS()}.x`;
         return makeLiveCode(e.secret, e.tab, kind === 'screen' ? nowS() - 300 : nowS());
@@ -472,59 +483,79 @@
   };
 
   // ---------- REAL: те же функции через вебхуки n8n ----------
+  // Ответ n8n всегда {success, ...}; при ошибке — {success:false, error} и HTTP-код.
+  // Ошибка: err.message = текст от сервера, err.status = HTTP-код, err.auth = true при 401.
   async function call(path, body, token, method) {
-    const r = await fetch(C.API_BASE + path, {
-      method: method || 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token, 'X-Device-Token': token } : {}),
-      body: method === 'GET' ? undefined : JSON.stringify(body || {})
-    });
-    if (r.status === 401) throw new Error('auth');
-    if (!r.ok) throw new Error('http ' + r.status);
-    return r.json();
+    let r, j = null;
+    try {
+      r = await fetch(C.API_BASE + path, {
+        method: method || 'POST',
+        headers: Object.assign(method === 'GET' ? {} : { 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        body: method === 'GET' ? undefined : JSON.stringify(body || {})
+      });
+    } catch (e) { const er = new Error('net'); er.net = true; throw er; }
+    try { j = await r.json(); } catch (e) {}
+    if (r.status === 401) { const er = new Error((j && j.error) || 'auth'); er.status = 401; er.auth = true; throw er; }
+    if (!r.ok || !j || j.success === false) { const er = new Error((j && j.error) || ('HTTP ' + r.status)); er.status = r.status; throw er; }
+    return j;
   }
   const adminToken = () => { try { return localStorage.getItem('za-admin-token'); } catch (e) { return null; } };
+  const data = r => (r && 'data' in r ? r.data : r);
+  const rel = path => new URL(path, location.href).href;
+  const A = (action, extra) => call('/admin/api', Object.assign({ action }, extra || {}), adminToken()).then(data);
   const REAL = {
     time: () => call('/time', null, null, 'GET'),
-    activate: invite => call('/activate', { invite }),
+    activate: invite => call('/app', { action: 'activate', invite }).then(data),
     pendingInvites: async () => [],
-    me: t => call('/me', {}, t),
-    myEvents: t => call('/my-events', {}, t),
-    deviceRegister: code => call('/device/register', { code }),
-    devicePing: (t, info) => call('/device/ping', info, t),
-    scan: (body, t) => call('/scan', body, t),
-    passInfo: code => call('/pass', { code }),
+    me: t => call('/app', { action: 'me' }, t).then(data),
+    myEvents: t => call('/app', { action: 'events' }, t).then(data),
+    deviceRegister: code => call('/scanner', { action: 'register', code }).then(data),
+    devicePing: (t, info) => call('/scanner', Object.assign({ action: 'ping' }, info), t).then(data),
+    scan: (body, t) => call('/scanner', Object.assign({ action: 'scan' }, body), t).then(data),
+    passInfo: code => call('/pass?code=' + encodeURIComponent(code || ''), null, null, 'GET').then(data),
     admin: {
-      login: (user, pass) => call('/admin/login', { user, pass }),
-      dashboard: branchId => call('/admin/dashboard', { branchId }, adminToken()),
-      punches: f => call('/admin/punches', f, adminToken()),
-      check: id => call('/admin/punches/check', { id }, adminToken()),
-      employees: q => call('/admin/employees', { q }, adminToken()),
-      saveEmployee: e => call('/admin/employees/save', e, adminToken()),
-      createInvite: empId => call('/admin/invites', { empId }, adminToken()),
-      staticCode: (empId, reissue) => call('/admin/static-code', { empId, reissue }, adminToken()),
-      branches: () => call('/admin/branches', {}, adminToken()),
-      saveBranch: name => call('/admin/branches/save', { name }, adminToken()),
-      saveGate: (branchId, name) => call('/admin/gates/save', { branchId, name }, adminToken()),
-      devices: () => call('/admin/devices', {}, adminToken()),
-      createDeviceCode: gateId => call('/admin/devices/code', { gateId }, adminToken()),
-      report: f => call('/admin/report', f, adminToken()),
+      login: (login, password) => call('/admin/login', { login, password }),
+      me: () => call('/admin/me', null, adminToken(), 'GET'),
+      logout: () => call('/admin/logout', {}, adminToken()),
+      password: (old_password, new_password) => call('/admin/password', { old_password, new_password }, adminToken()),
+      dashboard: branchId => A('dashboard', { branchId }),
+      punches: f => A('punches', { f: f || {} }),
+      check: id => A('check', { id }),
+      employees: q => A('employees', { q: q || '' }),
+      saveEmployee: x => A('save_employee', { x }),
+      createInvite: empId => A('create_invite', { empId }).then(r => ({ code: r.code, url: rel('../employee/index.html?invite=' + r.code) })),
+      staticCode: (empId, reissue) => A('static_code', { empId, reissue: !!reissue }),
+      branches: () => A('branches'),
+      saveBranch: name => A('save_branch', { name }),
+      saveGate: (branchId, name) => A('save_gate', { branchId, name }),
+      devices: () => A('devices'),
+      createDeviceCode: gateId => A('device_code', { gateId }),
+      report: f => A('report', { f: f || {} }),
       reset: async () => ({ ok: true }),
-      access: empId => call('/admin/access', { empId }, adminToken()),
-      setAccess: (empIds, gateIds, allow, until, note) => call('/admin/access/set', { empIds, gateIds, allow, until, note }, adminToken()),
-      resetAccess: (empId, gateId) => call('/admin/access/reset', { empId, gateId }, adminToken()),
-      setProfile: (empIds, profileId) => call('/admin/access/profile', { empIds, profileId }, adminToken()),
-      setHome: (empId, on) => call('/admin/access/home', { empId, on }, adminToken()),
-      setBlocked: (empIds, on) => call('/admin/access/block', { empIds, on }, adminToken()),
-      profiles: () => call('/admin/profiles', {}, adminToken()),
-      saveProfile: p => call('/admin/profiles/save', p, adminToken()),
-      gateAccess: gateId => call('/admin/gates/access', { gateId }, adminToken()),
-      passes: () => call('/admin/passes', {}, adminToken()),
-      createPass: x => call('/admin/passes/create', x, adminToken()),
-      revokePass: id => call('/admin/passes/revoke', { id }, adminToken()),
-      passUrl: code => new URL('../pass/index.html?p=' + code, location.href).href,
+      access: empId => A('access', { empId }),
+      setAccess: (empIds, gateIds, allow, until, note) => A('set_access', { empIds, gateIds, allow: !!allow, until: until || null, note: note || '' }),
+      resetAccess: (empId, gateId) => A('reset_access', { empId, gateId }),
+      setProfile: (empIds, profileId) => A('set_profile', { empIds, profileId: profileId || null }),
+      setHome: (empId, on) => A('set_home', { empId, on: !!on }),
+      setBlocked: (empIds, on) => A('set_blocked', { empIds, on: !!on }),
+      profiles: () => A('profiles'),
+      saveProfile: p => A('save_profile', { p }),
+      gateAccess: gateId => A('gate_access', { gateId }),
+      passes: () => A('passes'),
+      createPass: x => A('create_pass', { x }).then(p => Object.assign(p, { url: rel('../pass/index.html?p=' + p.code) })),
+      revokePass: id => A('revoke_pass', { id }),
+      passUrl: code => rel('../pass/index.html?p=' + code),
       demoCode: async () => '', demoEmployees: async () => []
     }
   };
 
-  window.API = Object.assign({}, C.MOCK ? MOCK : REAL, { mock: !!C.MOCK, makeLiveCode, makePassCode, uuid, hmac16, IN_SET });
+  // Гибрид: MOCK, но перечисленные в LIVE функции уже ходят в n8n
+  const API = Object.assign({}, C.MOCK ? MOCK : REAL);
+  API.admin = Object.assign({}, API.admin);
+  if (C.MOCK) (C.LIVE || []).forEach(name => {
+    const [a, b] = name.split('.');
+    if (b) { if (REAL.admin[b]) API.admin[b] = REAL.admin[b]; } else if (REAL[a]) API[a] = REAL[a];
+  });
+  const live = name => !C.MOCK || (C.LIVE || []).includes(name);
+  window.API = Object.assign(API, { mock: !!C.MOCK, live, makeLiveCode, makePassCode, uuid, hmac16, IN_SET });
 })();
