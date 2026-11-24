@@ -86,7 +86,8 @@
   const curEv = () => (choice ? choice.ev : suggest());
   const hmNow = () => { const d = new Date(nowSrv() * 1000); return d.getHours() * 60 + d.getMinutes(); };
   const toMin = x => { const [h, m] = String(x).split(':'); return +h * 60 + (+m || 0); };
-  const inLunch = () => hmNow() >= toMin(C.LUNCH_FROM || '11:00') && hmNow() < toMin(C.LUNCH_TO || '13:00');
+  const lunchWin = () => { const sc = day.schedule; return [sc && sc.lunchFrom || C.LUNCH_FROM || '11:00', sc && sc.lunchTo || C.LUNCH_TO || '13:00']; };
+  const inLunch = () => hmNow() >= toMin(lunchWin()[0]) && hmNow() < toMin(lunchWin()[1]);
   const state = () => { const l = day.last && day.last.event; return !l || l === 'OUT' ? 'off' : l === 'BREAK_OUT' ? 'break' : l === 'DUTY_OUT' ? 'duty' : 'work'; };
   function suggest() {
     const st = state();
@@ -104,7 +105,7 @@
     if (st === 'break' && k !== 'BREAK_IN') return `${t('pk_r_break')} ${since}.`;
     if (st === 'duty' && k !== 'DUTY_IN') return `${t('pk_r_duty')} ${since}.`;
     if (k === 'BREAK_OUT' && day.today.includes('BREAK_OUT')) return t('pk_r_lunchdone');
-    if (k === 'BREAK_OUT' && !inLunch()) { const d = new Date(nowSrv() * 1000); return `${t('pk_now')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}. ${t('pk_r_lunchtime')} ${C.LUNCH_FROM}–${C.LUNCH_TO}.`; }
+    if (k === 'BREAK_OUT' && !inLunch() && !(day.schedule && day.schedule.noControl)) { const d = new Date(nowSrv() * 1000); return `${t('pk_now')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}. ${t('pk_r_lunchtime')} ${lunchWin()[0]}–${lunchWin()[1]}.`; }
     return '';
   }
 
@@ -161,7 +162,7 @@
       try {
         const r = await API.me(S.token); const st = document.getElementById('st'); if (!st) return;
         const l = r.last;
-        const before = curEv(); day = { last: l, today: r.today || [] };
+        const before = curEv(); day = { last: l, today: r.today || [], schedule: r.schedule || null };
         if (choice && (choice.last !== lastKey() || Date.now() - choice.at > 10 * 60e3)) choice = null; // отметились или прошло 10 минут — снова подсказка
         paint(); if (curEv() !== before) draw();
         if (l && API.IN_SET.includes(l.event)) { st.className = 'stat'; st.innerHTML = `<span class="dot"></span>${t('at_work_since')} ${I18N.hm(l.scannedAt)}`; }

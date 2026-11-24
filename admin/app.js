@@ -123,7 +123,7 @@
         <a href="../employee/index.html" target="_blank">PWA</a><a href="../scanner/index.html" target="_blank">Scanner</a></div>` : ''}
       <div class="layout">
         <nav class="side" aria-label="Меню">${ROUTES.map(([r, k]) => `<a class="si" href="#${r}" data-r="${r}"><span data-i18n="${k}"></span>${r === 'sb' ? '<span class="b p-wa" id="sbBadge"></span>' : ''}${r === 'devices' ? '<span class="b p-er" id="devBadge"></span>' : ''}</a>`).join('')}
-          <div class="ver"><span data-i18n="version"></span> 1.2</div></nav>
+          <div class="ver"><span data-i18n="version"></span> 1.3</div></nav>
         <main class="main" id="view"></main>
       </div>`;
     I18N.apply();
@@ -180,6 +180,132 @@
     <td>${evTxt(r.event)}</td>
     <td>${UI.verdictPill(r.verdict)}${r.verdict === 'PWA_SCREEN' && r.codeAge ? `<small>${Math.round(r.codeAge / 60)} ${t('ago_min')}</small>` : ''}${r.reason ? `<small>${t('pr_' + r.reason)}</small>` : ''}</td></tr>`;
   const punchHead = () => `<thead><tr><th>${t('c_time')}</th><th>${t('c_emp')}</th><th>${t('c_pos')}</th><th>${t('c_place')}</th><th>${t('c_event')}</th><th>${t('c_code')}</th></tr></thead>`;
+
+  // ---------- дисциплина: общие помощники ----------
+  const dur = m => (m == null ? '—' : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`);
+  const ddmm = d => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  const violPills = d => {
+    const out = [];
+    if (d.holiday) out.push(`<span class="pill p-mu">${t('d_holiday')}</span>`);
+    if (d.excuse) out.push(`<span class="pill p-bl">${t('exc_' + d.excuse)}</span>`);
+    if (!d.isWork && !d.holiday && !d.excuse) out.push(`<span class="pill p-mu">${t('d_weekend')}</span>`);
+    if (d.noControl) out.push(`<span class="pill p-mu">${t('d_noctl')}</span>`);
+    if (d.absent) out.push(`<span class="pill p-er">${t('v_absent')}</span>`);
+    if (d.late) out.push(`<span class="pill p-wa">${t('v_late')} ${d.late} ${t('min')}</span>`);
+    if (d.early) out.push(`<span class="pill p-wa">${t('v_early')} ${d.early} ${t('min')}</span>`);
+    if (d.noOut) out.push(`<span class="pill p-wa">${t('v_noout')}</span>`);
+    if (d.lunchOutside) out.push(`<span class="pill p-wa">${t('v_lunch_out')}</span>`);
+    if (d.lunchOver) out.push(`<span class="pill p-wa">${t('v_lunch_over')} +${d.lunchOver} ${t('min')}</span>`);
+    if (d.lunchNoReturn) out.push(`<span class="pill p-er">${t('v_lunch_noret')}</span>`);
+    if (d.lunchTwice) out.push(`<span class="pill p-wa">${t('v_lunch_twice')}</span>`);
+    return out.join(' ');
+  };
+  const lunchTxt = d => d.lunchOut ? `${d.lunchOut}–${d.lunchIn || '…'}${d.lunchMin ? ` · ${d.lunchMin} ${t('min')}` : ''}` : '—';
+  const violText = d => violPills(d).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const dayRow = (d, withEmp) => `<tr class="${d.violations ? 'bad' : ''}"><td class="t">${ddmm(d.day)}</td>
+    ${withEmp ? `<td class="mono">${esc(d.employee.tab)}</td><td><b>${esc(pick(d.employee.name))}</b><small>${esc(pick(d.employee.pos))}</small></td><td>${esc(pick(d.employee.branch))}</td>` : ''}
+    <td class="t">${d.arrival || '—'}</td><td class="t">${d.leave || '—'}</td><td class="t">${lunchTxt(d)}</td><td class="t">${dur(d.workedMin)}</td><td>${violPills(d)}</td></tr>`;
+  const dayHead = withEmp => `<thead><tr><th>${t('c_date')}</th>${withEmp ? `<th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_branch')}</th>` : ''}<th>${t('first_in')}</th><th>${t('last_out')}</th><th>${t('c_lunch')}</th><th>${t('worked')}</th><th>${t('c_viol')}</th></tr></thead>`;
+  const monthStart = () => today().slice(0, 8) + '01';
+
+  const sbTabs = cur => `<div class="tabs2" id="sbt" style="margin:0 0 14px"><button type="button" data-st="codes" class="${cur === 'codes' ? 'on' : ''}">${t('sb_codes')}</button><button type="button" data-st="disc" class="${cur === 'disc' ? 'on' : ''}">${t('sb_disc')}</button></div>`;
+  document.addEventListener('click', e => { const b = e.target.closest('#sbt [data-st]'); if (b) { state.sbTab = b.dataset.st; render(); } });
+  async function sbDisc(v) {
+    state.branches = await API.admin.branches();
+    v.innerHTML = `<div class="mh"><div><h1>${t('sb_page')}</h1><p>${t('sb_disc_sub')}</p></div></div>${sbTabs('disc')}
+      <div class="card" style="padding:16px 20px"><div class="ctl">
+        <label class="f"><span>${t('date_from')}</span><input class="in" type="date" id="df" value="${monthStart()}"></label>
+        <label class="f"><span>${t('date_to')}</span><input class="in" type="date" id="dt" value="${today()}"></label>
+        <label class="f"><span>${t('c_branch')}</span>${branchSelect('db', 0)}</label>
+        <label class="f"><span>${t('c_viol')}</span><select class="in" id="dty"><option value="">${t('f_all')}</option><option value="late">${t('v_late')}</option><option value="early">${t('v_early')}</option><option value="lunch">${t('c_lunch')}</option><option value="absent">${t('v_absent')}</option></select></label>
+        <button class="btn pri" type="button" id="dgo">${t('rep_build')}</button></div></div>
+      <section class="card rc" id="rep" style="margin-bottom:16px"></section>
+      <section class="card" style="overflow:hidden"><div class="tw"><table>${dayHead(true)}<tbody id="dB"></tbody></table></div></section>`;
+    const go = async () => {
+      const r = await API.admin.violations({ from: v.querySelector('#df').value, to: v.querySelector('#dt').value, branchId: +v.querySelector('#db').value, type: v.querySelector('#dty').value });
+      v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${x.lateMin} ${t('min')}</span>`).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
+      v.querySelector('#dB').innerHTML = r.rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`;
+    };
+    v.querySelector('#dgo').onclick = go; await go();
+  }
+
+  // ---------- график филиала ----------
+  async function scheduleModal(br) {
+    const sc = await API.admin.schedule(br.id);
+    const hrs = m => (m / 60).toString().replace('.', ',');
+    const row = d => `<tr data-dow="${d.dow}"><td><b>${t('dow_' + d.dow)}</b></td>
+      <td><input type="checkbox" class="sw-w" ${d.isWork ? 'checked' : ''} aria-label="${t('workday')}"></td>
+      <td><input class="in sm" type="time" data-k="winFrom" value="${d.winFrom}"></td><td><input class="in sm" type="time" data-k="winTo" value="${d.winTo}"></td>
+      <td><input class="in sm" type="number" min="1" max="24" step="0.5" data-k="workH" value="${hrs(d.workMin).replace(',', '.')}"></td>
+      <td><input class="in sm" type="time" data-k="lunchFrom" value="${d.lunchFrom}"></td><td><input class="in sm" type="time" data-k="lunchTo" value="${d.lunchTo}"></td>
+      <td><input class="in sm" type="number" min="0" max="240" step="5" data-k="lunchMin" value="${d.lunchMin}"></td></tr>`;
+    UI.modal(`<h2>${t('schedule')} · ${esc(pick(br.name))}</h2><p>${t('sched_hint')}</p>
+      <div class="tw"><table class="sched"><thead><tr><th>${t('c_day')}</th><th>${t('workday')}</th><th>${t('win_from')}</th><th>${t('win_to')}</th><th>${t('work_h')}</th><th>${t('lunch_from')}</th><th>${t('lunch_to')}</th><th>${t('lunch_min')}</th></tr></thead>
+      <tbody>${sc.days.map(row).join('')}</tbody></table></div>
+      <div class="ctl" style="margin-top:12px"><button class="btn sm" type="button" id="cp">${t('copy_mon')}</button>
+        <label class="f" style="flex-direction:row;align-items:center;gap:8px"><span>${t('tolerance')}</span><input class="in sm" type="number" min="0" max="60" id="tol" value="${sc.tolerance}" style="width:80px"> ${t('min')}</label></div>
+      <div class="ac-err" id="se" hidden></div>
+      <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="ok">${t('save')}</button></div>`, (m, close) => {
+      m.classList.add('wide');
+      const read = () => [...m.querySelectorAll('tr[data-dow]')].map(tr => { const g = k => tr.querySelector(`[data-k="${k}"]`).value;
+        return { dow: +tr.dataset.dow, isWork: tr.querySelector('.sw-w').checked, winFrom: g('winFrom'), winTo: g('winTo'), workMin: Math.round(parseFloat(String(g('workH')).replace(',', '.')) * 60), lunchFrom: g('lunchFrom'), lunchTo: g('lunchTo'), lunchMin: +g('lunchMin') || 0 }; });
+      m.querySelector('#cp').onclick = () => { const mon = read()[0];
+        m.querySelectorAll('tr[data-dow]').forEach(tr => { if (+tr.dataset.dow >= 2 && +tr.dataset.dow <= 5) { tr.querySelector('.sw-w').checked = mon.isWork;
+          ['winFrom', 'winTo', 'lunchFrom', 'lunchTo', 'lunchMin'].forEach(k => { tr.querySelector(`[data-k="${k}"]`).value = mon[k]; }); tr.querySelector('[data-k="workH"]').value = mon.workMin / 60; } }); };
+      m.querySelector('#ok').onclick = async () => {
+        const days = read(), se = m.querySelector('#se');
+        const bad = days.find(d => d.isWork && (!(d.workMin > 0) || d.winTo <= d.winFrom || d.lunchTo < d.lunchFrom));
+        if (bad) { se.textContent = `${t('dow_' + bad.dow)}: ${t('sched_bad')}`; se.hidden = false; return; }
+        try { await API.admin.saveSchedule(br.id, +m.querySelector('#tol').value || 0, days); close(); UI.toast(t('saved')); }
+        catch (err) { se.textContent = err.message; se.hidden = false; }
+      };
+    });
+  }
+  async function holidaysModal() {
+    const list = await API.admin.holidays();
+    UI.modal(`<h2>${t('holidays')}</h2><p>${t('hol_hint')}</p>
+      <ul class="hl">${list.map(h => `<li><span class="mono">${ddmm(h.day)}.${h.day.slice(0, 4)}</span><span>${esc(h.name)}</span><button class="btn sm" type="button" data-rm="${h.day}">${t('remove')}</button></li>`).join('') || `<li style="color:var(--mu)">—</li>`}</ul>
+      <div class="ctl" style="margin-top:12px"><input class="in" type="date" id="hd"><input class="in" id="hn" placeholder="${t('hol_name')}"><button class="btn pri" type="button" id="ha">${t('add')}</button></div>
+      <div class="acts"><button class="btn" type="button" data-close>${t('close')}</button></div>`, (m, close) => {
+      m.querySelector('#ha').onclick = async () => { const d = m.querySelector('#hd').value; if (!d) return; await API.admin.saveHoliday(d, m.querySelector('#hn').value.trim()); close(); holidaysModal(); };
+      m.addEventListener('click', async e => { const b = e.target.closest('[data-rm]'); if (b) { await API.admin.saveHoliday(b.dataset.rm, '', true); close(); holidaysModal(); } });
+    });
+  }
+
+  // ---------- карточка сотрудника: дисциплина ----------
+  async function disciplinePanel(box, e, month) {
+    month = month || today().slice(0, 7);
+    box.innerHTML = '…';
+    const r = await API.admin.discipline(e.id, month);
+    const T = r.totals || {};
+    const byDay = Object.fromEntries(r.days.map(d => [d.day, d]));
+    const first = new Date(month + '-01T12:00:00'), y = first.getFullYear(), mo = first.getMonth();
+    const n = new Date(y, mo + 1, 0).getDate(), lead = (first.getDay() + 6) % 7;
+    const cls = d => !d ? 'fut' : d.excuse ? 'exc' : d.absent ? 'abs' : d.violations ? 'bad' : d.arrival ? 'ok' : (d.holiday || !d.isWork) ? 'off' : 'none';
+    const prev = new Date(y, mo - 1, 15).toISOString().slice(0, 7), next = new Date(y, mo + 1, 15).toISOString().slice(0, 7);
+    box.innerHTML = `<div class="ctl" style="justify-content:space-between;margin-bottom:10px"><button class="btn sm" type="button" data-mo="${prev}">←</button><b>${I18N.pick({ uk: first.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' }), ru: first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }) })}</b><button class="btn sm" type="button" data-mo="${next}" ${next > today().slice(0, 7) ? 'disabled' : ''}>→</button></div>
+      <div class="dtot">
+        <div><b>${T.late || 0}</b><span>${t('r_late')}</span><small>${T.lateMin || 0} ${t('min')}</small></div>
+        <div><b>${T.early || 0}</b><span>${t('r_early')}</span><small>${T.earlyMin || 0} ${t('min')}</small></div>
+        <div><b>${T.lunch || 0}</b><span>${t('r_lunch')}</span><small>+${T.lunchOverMin || 0} ${t('min')}</small></div>
+        <div><b>${T.absent || 0}</b><span>${t('v_absent')}</span><small>${t('r_excused')}: ${T.excused || 0}</small></div>
+        <div><b>${dur(T.workedMin || 0)}</b><span>${t('worked')}</span><small>${T.days || 0} ${t('r_days').toLowerCase()}</small></div>
+      </div>
+      <div class="cal">${[1, 2, 3, 4, 5, 6, 7].map(i => `<div class="cw">${t('dow_' + i)}</div>`).join('')}${'<div></div>'.repeat(lead)}
+        ${Array.from({ length: n }, (_, i) => { const ds = `${month}-${String(i + 1).padStart(2, '0')}`, d = byDay[ds];
+          return `<button type="button" class="cd ${cls(d)}" data-day="${ds}" ${d ? '' : 'disabled'} title="${d ? esc(violText(d)) : ''}"><b>${i + 1}</b><small>${d && d.arrival ? d.arrival : d && d.excuse ? t('exc_' + d.excuse) : ''}</small></button>`; }).join('')}</div>
+      <div class="legend"><span class="cd ok"></span>${t('lg_ok')}<span class="cd bad"></span>${t('lg_bad')}<span class="cd abs"></span>${t('v_absent')}<span class="cd exc"></span>${t('lg_exc')}<span class="cd off"></span>${t('d_weekend')}</div>
+      <div id="dday" style="margin-top:12px"></div>`;
+    box.querySelectorAll('[data-mo]').forEach(b => b.onclick = () => disciplinePanel(box, e, b.dataset.mo));
+    box.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+      const d = byDay[b.dataset.day]; const dd = box.querySelector('#dday');
+      dd.innerHTML = `<div class="card" style="padding:14px 16px"><b>${ddmm(d.day)}</b> · ${t('first_in')} ${d.arrival || '—'} · ${t('last_out')} ${d.leave || '—'} · ${t('c_lunch')} ${lunchTxt(d)} · ${t('worked')} ${dur(d.workedMin)}
+        <div style="margin:8px 0">${violPills(d) || `<span class="pill p-ok">${t('lg_ok')}</span>`}</div>
+        <div class="ctl"><label class="f"><span>${t('excuse')}</span><select class="in" id="exr"><option value="">—</option>${['vacation', 'sick', 'trip', 'leave', 'other'].map(k => `<option value="${k}" ${d.excuse === k ? 'selected' : ''}>${t('exc_' + k)}</option>`).join('')}</select></label>
+        <button class="btn pri sm" type="button" id="exs">${t('save')}</button></div></div>`;
+      dd.querySelector('#exs').onclick = async () => { try { await API.admin.excuse(e.id, d.day, dd.querySelector('#exr').value); disciplinePanel(box, e, month); } catch (err) { UI.toast(err.message); } };
+    });
+  }
 
   // ---------- экраны ----------
   const VIEWS = {
@@ -252,8 +378,10 @@
     },
 
     async sb(v) {
+      if (state.sbTab === 'disc') return sbDisc(v);
       v.innerHTML = `<div class="mh"><div><h1>${t('sb_page')}</h1><p>${t('sb_page_sub')}</p></div>
         <div class="ctl"><label class="chk"><input type="checkbox" id="unc" checked> ${t('f_unchecked')}</label></div></div>
+        ${sbTabs('codes')}
         <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_date')}</th><th>${t('c_emp')}</th><th>${t('c_place')}</th><th>${t('c_event')}</th><th>${t('c_code')}</th><th></th></tr></thead><tbody id="sbB"></tbody></table></div></section>`;
       const load = async () => {
         const rows = await API.admin.punches({ from: daysAgo(30), to: today(), verdict: 'flag', unchecked: v.querySelector('#unc').checked });
@@ -329,15 +457,16 @@
       if (sub === 'profiles') {
         const ps = await API.admin.profiles();
         box.innerHTML = `<div class="ctl" style="margin-bottom:14px"><button class="btn pri" type="button" id="padd">${t('add_profile')}</button></div>
-          <div class="bcards">${ps.map(p => `<section class="card bc"><h3>${esc(pick(p.name))}</h3><p>${p.staff} ${t('emps_n')} · ${p.gateIds.length} ${t('gates')}</p>
+          <div class="bcards">${ps.map(p => `<section class="card bc"><h3>${esc(pick(p.name))}</h3><p>${p.staff} ${t('emps_n')} · ${p.gateIds.length} ${t('gates')}${p.noDiscipline ? ` · <span class="pill p-mu">${t('d_noctl')}</span>` : ''}</p>
             <div class="chips">${p.places.map(x => `<span class="pill p-mu">${esc(pick(x.branch))} · ${esc(pick(x.gate))}</span>`).join('')}</div>
             <button class="btn sm" type="button" data-pe="${p.id}" style="margin-top:12px">${t('edit')}</button></section>`).join('')}</div>`;
         const edit = p => UI.modal(`<h2>${p ? esc(pick(p.name)) : t('add_profile')}</h2>
           <div class="grid2"><label class="f">${t('profile_name')} (УКР)<input class="in" id="nu" value="${p ? esc(p.name.uk) : ''}"></label><label class="f">${t('profile_name')} (РУС)<input class="in" id="nr" value="${p ? esc(p.name.ru) : ''}"></label></div>
+          <label class="chk" style="margin-top:12px"><input type="checkbox" id="nd" ${p && p.noDiscipline ? 'checked' : ''}> ${t('no_discipline')}</label>
           <p style="margin:16px 0 8px;font-weight:700;color:var(--ink)">${t('choose_locs')}</p>${UI.gateTree(bs, p ? p.gateIds : [])}
           <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="ok">${t('save')}</button></div>`,
           (m, close) => { const get = UI.bindTree(m); m.querySelector('#ok').onclick = async () => { const uk = m.querySelector('#nu').value.trim(); if (!uk) return;
-            await API.admin.saveProfile({ id: p && p.id, name: { uk, ru: m.querySelector('#nr').value.trim() || uk }, gateIds: get() }); close(); render(); }; });
+            await API.admin.saveProfile({ id: p && p.id, name: { uk, ru: m.querySelector('#nr').value.trim() || uk }, gateIds: get(), noDiscipline: m.querySelector('#nd').checked }); close(); render(); }; });
         box.querySelector('#padd').onclick = () => edit(null);
         box.addEventListener('click', e => { const b = e.target.closest('[data-pe]'); if (b) edit(ps.find(x => x.id === +b.dataset.pe)); });
       } else {
@@ -396,16 +525,18 @@
 
     async branches(v) {
       const bs = await API.admin.branches();
-      v.innerHTML = `<div class="mh"><div><h1>${t('branches_page')}</h1></div><div class="ctl"><button class="btn pri" type="button" id="badd">${t('add_branch')}</button></div></div>
+      v.innerHTML = `<div class="mh"><div><h1>${t('branches_page')}</h1></div><div class="ctl"><button class="btn" type="button" id="hol">${t('holidays')}</button><button class="btn pri" type="button" id="badd">${t('add_branch')}</button></div></div>
         <div class="bcards">${bs.map(b => `<section class="card bc"><h3>${esc(pick(b.name))}</h3><p>${b.staff} ${t('emps_n')} · ${b.gates.length} ${t('gates')}</p>
           <ul>${b.gates.map(g => `<li><span>${esc(pick(g.name))}</span></li>`).join('')}</ul>
-          <button class="btn sm" type="button" data-addg="${b.id}">${t('add_gate')}</button></section>`).join('')}</div>`;
+          <div class="acts" style="justify-content:flex-start;margin-top:10px"><button class="btn sm" type="button" data-addg="${b.id}">${t('add_gate')}</button><button class="btn sm" type="button" data-sch="${b.id}">${t('schedule')}</button></div></section>`).join('')}</div>`;
       const ask = (title, cb) => UI.modal(`<h2>${esc(title)}</h2>
         <div class="grid2"><label class="f">УКР<input class="in" id="nu" required></label><label class="f">РУС<input class="in" id="nr"></label></div>
         <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="ok">${t('save')}</button></div>`,
         (m, close) => { m.querySelector('#ok').onclick = async () => { const uk = m.querySelector('#nu').value.trim(); if (!uk) return; await cb({ uk, ru: m.querySelector('#nr').value.trim() || uk }); close(); render(); }; });
       v.querySelector('#badd').onclick = () => ask(t('branch_name'), n => API.admin.saveBranch(n));
       v.addEventListener('click', e => { const b = e.target.closest('[data-addg]'); if (b) ask(t('gate_name'), n => API.admin.saveGate(+b.dataset.addg, n)); });
+      v.addEventListener('click', e => { const b = e.target.closest('[data-sch]'); if (b) scheduleModal(bs.find(x => x.id === +b.dataset.sch)); });
+      v.querySelector('#hol').onclick = holidaysModal;
     },
 
     async devices(v) {
@@ -427,25 +558,43 @@
 
     async reports(v) {
       state.branches = await API.admin.branches();
-      v.innerHTML = `<div class="mh"><div><h1>${t('reports_page')}</h1><p>${t('rep_hint')}</p></div></div>
-        <div class="card" style="padding:16px 20px"><h2 style="margin:0 0 12px;font-size:19px">${t('rep_first_last')}</h2><div class="ctl">
+      v.innerHTML = `<div class="mh"><div><h1>${t('reports_page')}</h1><p>${t('rep_hint2')}</p></div></div>
+        <div class="card" style="padding:16px 20px"><div class="tabs2" id="rm" style="margin-bottom:14px"><button type="button" data-m="days" class="on">${t('rep_days')}</button><button type="button" data-m="rating">${t('rep_rating')}</button></div>
+          <div class="ctl">
           <label class="f"><span>${t('date_from')}</span><input class="in" type="date" id="rf" value="${daysAgo(6)}"></label>
           <label class="f"><span>${t('date_to')}</span><input class="in" type="date" id="rt" value="${today()}"></label>
           <label class="f"><span>${t('c_branch')}</span>${branchSelect('rb', 0)}</label>
+          <label class="chk" id="rbadw"><input type="checkbox" id="rbad"> ${t('only_viol')}</label>
           <button class="btn pri" type="button" id="rgo">${t('rep_build')}</button><button class="btn" type="button" id="rcsv">${t('export_csv')}</button></div></div>
-        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_date')}</th><th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_branch')}</th><th>${t('first_in')}</th><th>${t('last_out')}</th><th>${t('hours')}</th><th>${t('flags')}</th></tr></thead><tbody id="rB"></tbody></table></div></section>`;
-      let rows = [];
-      const hrs = r => r.first && r.last ? ((new Date(r.last) - new Date(r.first)) / 36e5).toFixed(1) : '—';
-      const f = () => ({ from: v.querySelector('#rf').value, to: v.querySelector('#rt').value, branchId: +v.querySelector('#rb').value });
-      const go = async () => {
-        rows = await API.admin.report(f());
-        v.querySelector('#rB').innerHTML = rows.map(r => `<tr><td class="t">${r.day.slice(8)}.${r.day.slice(5, 7)}</td><td class="mono">${esc(r.employee.tab)}</td><td><b>${esc(pick(r.employee.name))}</b></td><td>${esc(pick(r.branch))}</td>
-          <td class="t">${r.first ? I18N.hm(r.first) : '—'}</td><td class="t">${r.last ? I18N.hm(r.last) : '—'}</td><td class="t">${hrs(r)}</td><td>${r.flags ? `<span class="pill p-wa">${r.flags}</span>` : ''}</td></tr>`).join('') || `<tr><td colspan="8" class="empty">—</td></tr>`;
+        <section class="card" style="overflow:hidden"><div class="tw"><table id="rT"></table></div></section>`;
+      let rows = [], mode = 'days', sortK = 'violations', sortD = -1;
+      const f = () => ({ from: v.querySelector('#rf').value, to: v.querySelector('#rt').value, branchId: +v.querySelector('#rb').value, mode });
+      const RCOLS = [['tab', 'c_tab'], ['name', 'c_name'], ['branch', 'c_branch'], ['days', 'r_days'], ['workedMin', 'worked'], ['late', 'r_late'], ['lateMin', 'r_late_min'], ['lateMax', 'r_late_max'],
+        ['early', 'r_early'], ['earlyMin', 'r_early_min'], ['noOut', 'v_noout'], ['lunch', 'r_lunch'], ['lunchOverMin', 'r_lunch_min'], ['absent', 'v_absent'], ['excused', 'r_excused'], ['violations', 'r_total']];
+      const rval = (r, k) => k === 'tab' ? r.employee.tab : k === 'name' ? pick(r.employee.name) : k === 'branch' ? pick(r.employee.branch) || '' : r[k];
+      const draw = () => {
+        const T = v.querySelector('#rT');
+        if (mode === 'days') {
+          const list = v.querySelector('#rbad').checked ? rows.filter(r => r.violations) : rows;
+          T.innerHTML = dayHead(true) + `<tbody>${list.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`}</tbody>`;
+        } else {
+          const list = rows.slice().sort((x, y) => { const a = rval(x, sortK), b = rval(y, sortK); return (a > b ? 1 : a < b ? -1 : 0) * sortD; });
+          T.innerHTML = `<thead><tr>${RCOLS.map(([k, l]) => `<th class="sortable" data-k="${k}">${t(l)}${sortK === k ? (sortD < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead>
+            <tbody>${list.map(r => `<tr class="${r.violations ? 'bad' : ''}">${RCOLS.map(([k]) => k === 'name' ? `<td><b>${esc(pick(r.employee.name))}</b><small>${esc(pick(r.employee.pos))}</small></td>`
+              : k === 'tab' ? `<td class="mono">${esc(r.employee.tab)}</td>` : k === 'branch' ? `<td>${esc(pick(r.employee.branch))}</td>`
+              : k === 'workedMin' ? `<td class="t">${dur(r.workedMin)}</td>` : `<td class="t">${r[k] ? `<b>${r[k]}</b>` : '<span style="color:var(--mu)">0</span>'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${RCOLS.length}" class="empty">—</td></tr>`}</tbody>`;
+        }
       };
+      const go = async () => { rows = await API.admin.report(f()); draw(); };
+      v.querySelector('#rm').onclick = e => { const b = e.target.closest('[data-m]'); if (!b) return; mode = b.dataset.m;
+        v.querySelectorAll('#rm [data-m]').forEach(x => x.classList.toggle('on', x === b)); v.querySelector('#rbadw').style.display = mode === 'days' ? '' : 'none'; go(); };
+      v.querySelector('#rbad').onchange = draw;
+      v.querySelector('#rT').addEventListener('click', e => { const th = e.target.closest('[data-k]'); if (!th) return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = -1; } draw(); });
       v.querySelector('#rgo').onclick = go;
       v.querySelector('#rcsv').onclick = async () => { if (!rows.length) await go();
-        UI.download(`zvit_${f().from}_${f().to}.csv`, UI.csv([[t('c_date'), t('c_tab'), t('c_name'), t('c_branch'), t('first_in'), t('last_out'), t('hours'), t('flags')],
-          ...rows.map(r => [r.day, r.employee.tab, pick(r.employee.name), pick(r.branch), r.first ? I18N.hm(r.first) : '', r.last ? I18N.hm(r.last) : '', hrs(r), r.flags])])); };
+        if (mode === 'days') UI.download(`zvit_${f().from}_${f().to}.csv`, UI.csv([[t('c_date'), t('c_tab'), t('c_name'), t('c_branch'), t('first_in'), t('last_out'), t('c_lunch'), t('worked'), t('c_viol')],
+          ...rows.map(d => [d.day, d.employee.tab, pick(d.employee.name), pick(d.employee.branch) || '', d.arrival || '', d.leave || '', lunchTxt(d), dur(d.workedMin), violText(d)])]));
+        else UI.download(`reiting_${f().from}_${f().to}.csv`, UI.csv([RCOLS.map(([, l]) => t(l)), ...rows.map(r => RCOLS.map(([k]) => k === 'workedMin' ? dur(r.workedMin) : rval(r, k)))])); };
       await go();
     }
   };
@@ -542,7 +691,7 @@
   function editEmp(e, done, startTab) {
     const kinds = ['office', 'warehouse', 'driver'];
     UI.modal(`<h2>${e ? esc(pick(e.name)) : t('add_emp')}</h2>
-      ${e ? `<div class="tabs2"><button type="button" data-tb="data" class="${startTab === 'access' ? '' : 'on'}">${t('tab_data')}</button><button type="button" data-tb="access" class="${startTab === 'access' ? 'on' : ''}">${t('tab_access')}</button></div>` : `<p>${t('emp_card')}</p>`}
+      ${e ? `<div class="tabs2"><button type="button" data-tb="data" class="${startTab === 'access' ? '' : 'on'}">${t('tab_data')}</button><button type="button" data-tb="access" class="${startTab === 'access' ? 'on' : ''}">${t('tab_access')}</button><button type="button" data-tb="disc">${t('tab_disc')}</button></div>` : `<p>${t('emp_card')}</p>`}
       <div id="tb-data" class="${startTab === 'access' ? 'hidden' : ''}">
       <div class="grid2">
         <label class="f">${t('c_tab')}<input class="in mono" id="m_tab" value="${e ? esc(e.tab) : ''}" required></label>
@@ -556,11 +705,14 @@
       <label class="chk" style="margin-top:14px"><input type="checkbox" id="m_act" ${!e || e.active ? 'checked' : ''}> ${t('f_active')}</label>
       <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="m_save">${t('save')}</button></div></div>
       <div id="tb-access" class="${startTab === 'access' ? '' : 'hidden'}"></div>
+      <div id="tb-disc" class="hidden"></div>
       ${e ? `<div class="acts" id="accActs" ${startTab === 'access' ? '' : 'style="display:none"'}><button class="btn pri" type="button" data-close>${t('close')}</button></div>` : ''}`,
       (m, close) => {
         m.classList.add('wide');
         const showTab = k => { m.querySelectorAll('[data-tb]').forEach(b => b.classList.toggle('on', b.dataset.tb === k)); m.querySelector('#tb-data').classList.toggle('hidden', k !== 'data');
-          m.querySelector('#tb-access').classList.toggle('hidden', k !== 'access'); const aa = m.querySelector('#accActs'); if (aa) aa.style.display = k === 'access' ? '' : 'none';
+          m.querySelector('#tb-access').classList.toggle('hidden', k !== 'access'); m.querySelector('#tb-disc').classList.toggle('hidden', k !== 'disc');
+          const aa = m.querySelector('#accActs'); if (aa) aa.style.display = k === 'access' || k === 'disc' ? '' : 'none';
+          if (k === 'disc') disciplinePanel(m.querySelector('#tb-disc'), e);
           if (k === 'access' && !m.querySelector('#tb-access').innerHTML) accessPanel(m.querySelector('#tb-access'), e.id, done); };
         m.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => showTab(b.dataset.tb));
         if (startTab === 'access') showTab('access');

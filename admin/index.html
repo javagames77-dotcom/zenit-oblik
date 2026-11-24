@@ -112,6 +112,21 @@ tr.new td{animation:flash 2s ease-out}
 .demo-tag{display:inline-block;align-self:flex-start;width:max-content;margin-bottom:12px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--or-ink);border:1.5px dashed var(--or);border-radius:6px;padding:4px 9px}
 .si.is-demo{outline:1.5px dashed var(--or);outline-offset:-3px}
 .demo-route .modal{outline:2px dashed var(--or);outline-offset:-6px}
+.sched td,.sched th{padding:6px 6px;white-space:nowrap}.sched .in.sm{height:36px;padding:0 8px;min-width:0;width:100%}.sched input[type=number]{width:80px}
+.sched input[type=checkbox]{width:20px;height:20px}
+tr.bad td{background:color-mix(in srgb,var(--or) 6%,transparent)}
+th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--or-ink)}
+.hl{list-style:none;padding:0;margin:0}.hl li{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
+.dtot{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}.dtot div{border:1px solid var(--bd);border-radius:12px;padding:10px;display:flex;flex-direction:column}
+.dtot b{font-size:22px}.dtot span{font-size:12px;font-weight:700}.dtot small{color:var(--mu);font-size:12px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cw{font-size:12px;font-weight:700;color:var(--mu);text-align:center}
+.cd{border:1px solid var(--bd);border-radius:8px;min-height:46px;background:var(--card);color:var(--ink);font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:2px}
+.cd small{font-size:10px;color:var(--mu)}.cd:disabled{cursor:default;opacity:.45}
+.cd.ok{background:#E3F4E6;border-color:#9AD3A8}.cd.bad{background:#FDEBDD;border-color:#F3B58A}.cd.abs{background:#FDE7E5;border-color:#F2A29B}
+.cd.exc{background:#E4ECFD;border-color:#A9C0F5}.cd.off{background:var(--bg)}
+:root[data-theme=dark] .cd.ok,:root[data-theme=dark] .cd.bad,:root[data-theme=dark] .cd.abs,:root[data-theme=dark] .cd.exc{color:#111318}
+.legend{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;color:var(--mu);margin-top:8px}.legend .cd{min-height:14px;width:18px;display:inline-block;padding:0}
+@media (max-width:700px){.dtot{grid-template-columns:repeat(2,1fr)}}
 @media print{.demo-tag{display:none}.main.is-demo{outline:0}.hdr,.side,.demo-bar,.noprint{display:none!important}.main{padding:0}}
 </style>
 </head>

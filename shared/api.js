@@ -343,6 +343,13 @@
         s.adminUser = { id: 1, login: login || 'admin', name: login || 'admin', role: 'admin', lang: 'uk', must_change: false }; save();
         return { success: true, token: s.adminToken, user: s.adminUser };
       },
+      async violations() { return { rows: [], repeat: [] }; },
+      async discipline(empId, month) { return { month, days: [], totals: {} }; },
+      async excuse() { return { ok: true }; },
+      async schedule(branchId) { return { branchId, tolerance: 5, days: [1, 2, 3, 4, 5, 6, 7].map(dow => ({ dow, isWork: dow <= 5, winFrom: '08:00', winTo: '18:00', workMin: 540, lunchFrom: '11:00', lunchTo: '13:00', lunchMin: 60 })) }; },
+      async saveSchedule() { return { ok: true }; },
+      async holidays() { return []; },
+      async saveHoliday() { return { ok: true }; },
       async me() { const s = fresh(); return { success: true, user: s.adminUser || { id: 1, login: 'admin', name: 'admin', role: 'admin', must_change: false } }; },
       async logout() { const s = fresh(); s.adminToken = null; save(); return { success: true }; },
       async password(oldP, newP) { const s = fresh(); if (s.adminUser) s.adminUser.must_change = false; save(); return { success: true, user: s.adminUser }; },
@@ -422,14 +429,15 @@
         return Object.assign({ code }, placeOf(s, gateId));
       },
       async report(f) {
+        // демо: приход/уход по дням в формате боевого отчета (без расчета нарушений)
+        if (f && f.mode === 'rating') return [];
         const rows = await MOCK.admin.punches(Object.assign({}, f, { verdict: '' }));
-        const by = {};
+        const by = {}, hm = x => new Date(x).toTimeString().slice(0, 5);
         rows.filter(r => r.accepted && r.employee).forEach(r => {
           const day = r.scannedAt.slice(0, 10); const k = r.employee.id + '|' + day;
-          const o = by[k] = by[k] || { employee: r.employee, day, first: null, last: null, flags: 0, branch: r.branch };
-          if (r.event === 'IN' && (!o.first || r.scannedAt < o.first)) o.first = r.scannedAt;
-          if (r.event === 'OUT' && (!o.last || r.scannedAt > o.last)) o.last = r.scannedAt;
-          if (r.verdict !== 'PWA_LIVE') o.flags++;
+          const o = by[k] = by[k] || { empId: r.employee.id, employee: r.employee, day, isWork: true, arrival: null, leave: null, violations: 0 };
+          if (r.event === 'IN' && !o.arrival) o.arrival = hm(r.scannedAt);
+          if (r.event === 'OUT') o.leave = hm(r.scannedAt);
         });
         return Object.values(by).sort((a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : a.employee.tab.localeCompare(b.employee.tab));
       },
@@ -539,6 +547,13 @@
       devices: () => A('devices'),
       createDeviceCode: gateId => A('device_code', { gateId }),
       report: f => A('report', { f: f || {} }),
+      violations: f => A('violations', { f: f || {} }),
+      discipline: (empId, month) => A('discipline', { empId, month }),
+      excuse: (empId, day, reason, note) => A('excuse', { empId, day, reason: reason || '', note: note || '' }),
+      schedule: branchId => A('schedule', { branchId }),
+      saveSchedule: (branchId, tolerance, days) => A('save_schedule', { branchId, tolerance, days }),
+      holidays: () => A('holidays'),
+      saveHoliday: (day, name, remove) => A('save_holiday', { day, name: name || '', remove: !!remove }),
       reset: async () => ({ ok: true }),
       access: empId => A('access', { empId }),
       setAccess: (empIds, gateIds, allow, until, note) => A('set_access', { empIds, gateIds, allow: !!allow, until: until || null, note: note || '' }),
