@@ -15,11 +15,32 @@
   }
 
   // ---------- активация ----------
+  let forceHere = false;
   async function renderActivate(err) {
     clear();
     const invite = new URLSearchParams(location.search).get('invite') || '';
     const demo = API.mock ? await API.pendingInvites() : [];
-    app.innerHTML = `<div class="act on-dark">
+    // iPhone: Safari и значок на экране «Домой» хранят данные раздельно.
+    // Поэтому в Safari не активируем, а просим сначала добавить на экран «Домой» — значок откроется уже с кодом.
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+    const iosBrowser = isIOS && !standalone && !forceHere;
+    const adminHref = new URL(window.ZA_CONFIG.ADMIN_URL || '../admin/index.html', location.href).href;
+    app.innerHTML = iosBrowser ? `<div class="act on-dark">
+      <div class="r1"><span class="kick">${t('emp_kicker')}</span>
+        <div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div></div>
+      <div class="act-ico"><img src="../shared/logo.svg" alt="Зеніт-Авто"></div>
+      <div class="act-app">${t('emp_app')}</div>
+      <h1>${t('ios_title')}</h1>
+      <ol class="steps big-steps">
+        <li><em>1</em><div><b>${t('ios_s1')}</b><span class="share-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span><small>${t('ios_s1s')}</small></div></li>
+        <li><em>2</em><div><b>${t('ios_s2')}</b></div></li>
+        <li><em>3</em><div><b>${t('ios_s3')}</b><small>${t('ios_s3s')}</small></div></li>
+      </ol>
+      ${invite ? `<div class="ios-code"><small>${t('invite_code')}</small><b class="mono">${esc(invite)}</b></div>` : ''}
+      <div class="fine">${t('ios_fine')} <a href="#" id="here">${t('ios_here')}</a></div>
+      <div class="act-foot">${t('emp_foot')} <a href="${esc(adminHref)}">${esc(adminHref.replace(/^https?:\/\//, ''))}</a></div>
+    </div>` : `<div class="act on-dark">
       <div class="r1"><span class="kick">${t('emp_kicker')}</span>
         <div class="seg" role="group" aria-label="Мова"><button type="button" data-lang="uk">УКР</button><button type="button" data-lang="ru">РУС</button></div></div>
       <div class="act-ico"><img src="../shared/logo.svg" alt="Зеніт-Авто"></div>
@@ -31,10 +52,11 @@
       ${err ? `<div class="hint" style="background:var(--er-bg);color:var(--er)">${t('act_bad')}</div>` : (invite ? '' : `<p>${t('act_need_link')}</p>`)}
       <button class="btn pri big" type="button" id="go">${t('activate')}</button>
       <div class="fine">${t('act_fine')}</div>
-      <div class="act-foot">${t('emp_foot')} <a href="${esc(window.ZA_CONFIG.ADMIN_URL || '../admin/index.html')}">${esc((window.ZA_CONFIG.ADMIN_URL || 'admin').replace(/^https?:\/\//, ''))}</a></div>
+      <div class="act-foot">${t('emp_foot')} <a href="${esc(adminHref)}">${esc(adminHref.replace(/^https?:\/\//, ''))}</a></div>
       ${demo.length ? `<div class="demo"><b>${t('demo_invites')}:</b>${demo.map(d => `<button class="btn sm" type="button" data-code="${esc(d.code)}">${esc(pick(d.employee.name))} · ${esc(d.code)}</button>`).join('')}</div>` : ''}
     </div>`;
     I18N.apply();
+    if (iosBrowser) { document.getElementById('here').onclick = e => { e.preventDefault(); forceHere = true; renderActivate(); }; return; }
     const go = async code => {
       const b = document.getElementById('go'); b.disabled = true;
       try {
@@ -129,5 +151,6 @@
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S && S.secret && tab === 'code') renderMain(); });
   const inv = new URLSearchParams(location.search).get('invite');
-  if (S && S.secret && !inv) renderMain(); else renderActivate();
+  // уже активирован — код в адресе игнорируем (на iPhone значок «Домой» всегда стартует с ним)
+  if (S && S.secret) renderMain(); else renderActivate();
 })();

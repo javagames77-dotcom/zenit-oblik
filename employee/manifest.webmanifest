@@ -2,7 +2,6 @@
   "name": "Зеніт-Авто.облік",
   "short_name": "Зеніт-Авто",
   "description": "Відмітка на прохідній",
-  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
