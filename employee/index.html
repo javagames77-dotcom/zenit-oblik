@@ -81,6 +81,35 @@ h2.t{margin:0;font-size:24px;font-weight:800}
 .demo{border:1px dashed var(--or);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
 .kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;font-size:15px}.kv span:nth-child(odd){color:var(--mu)}
 .card.p{padding:16px}
+/* установка (v1.8) */
+.act .btn.inst{display:flex;align-items:center;justify-content:center;gap:10px;height:62px;font-size:18px;font-weight:800;text-decoration:none;position:relative}
+.act a.btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
+.pulse::after{content:'';position:absolute;inset:-6px;border-radius:18px;border:3px solid var(--or);animation:zpulse 1.6s infinite;pointer-events:none}
+@keyframes zpulse{0%{opacity:.9;transform:scale(.97)}100%{opacity:0;transform:scale(1.06)}}
+.act .tabin{height:62px;font-size:28px;letter-spacing:.1em}
+.iosdemo{position:relative;height:150px;border-radius:18px;background:#171a20;border:1px solid #2A2E36;overflow:hidden}
+.iosdemo .fr{position:absolute;inset:0;opacity:0;animation:zfr 12s infinite}
+.iosdemo .f2{animation-delay:4s}.iosdemo .f3{animation-delay:8s}
+@keyframes zfr{0%{opacity:0}3%{opacity:1}30%{opacity:1}33.3%{opacity:0}100%{opacity:0}}
+.sfbar{position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.sfbar .url{background:#e3e3e8;border-radius:10px;width:86%;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#333}
+.sfbar .tb{display:flex;justify-content:space-around;width:100%;color:#0a84ff;font-size:20px;align-items:center}
+.hl{position:relative;display:inline-flex}.hl::after{content:'';position:absolute;inset:-9px;border-radius:50%;border:3px solid var(--or);animation:zpulse 1.2s infinite}
+.iosdemo .sheet{list-style:none;margin:14px;padding:0;background:#fff;border-radius:12px;color:#111}
+.iosdemo .sheet li{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eee;font-size:14px}
+.iosdemo .sheet li.go{background:#FDEBDD;font-weight:700;outline:3px solid var(--or);outline-offset:-3px;border-radius:10px;border:0}
+.iosdemo .hs{position:absolute;inset:0;background:linear-gradient(160deg,#2b5876,#4e4376);display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px 26px;align-content:center;justify-items:center}
+.iosdemo .hs i{width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.25);position:relative}
+.iosdemo .hs i.za{background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--or)}
+.iosdemo .hs i.za img{height:34px}
+.iosdemo .tap{position:absolute;inset:4px;border-radius:50%;background:rgba(255,255,255,.6);border:3px solid #fff;animation:ztap 1.4s infinite}
+@keyframes ztap{0%,100%{transform:scale(.6);opacity:.3}50%{transform:scale(1);opacity:1}}
+.steps.anim li{border-radius:14px;padding:6px 8px;margin:-6px -8px;animation:zst 12s infinite}
+.steps.anim li:nth-child(2){animation-delay:4s}.steps.anim li:nth-child(3){animation-delay:8s}
+@keyframes zst{0%,30%{background:#2b1c10}33.3%,100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.iosdemo .fr,.steps.anim li,.pulse::after,.hl::after,.iosdemo .tap{animation:none}.iosdemo .f1{opacity:1}}
+.pend{background:#1B1B1B;color:#fff;border-radius:14px;padding:12px 14px;font-size:15px;line-height:1.45}
+.pend b{color:var(--or)}
 </style>
 </head>
 <body>

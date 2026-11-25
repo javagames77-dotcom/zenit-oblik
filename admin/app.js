@@ -123,7 +123,7 @@
         <a href="../employee/index.html" target="_blank">PWA</a><a href="../scanner/index.html" target="_blank">Scanner</a></div>` : ''}
       <div class="layout">
         <nav class="side" aria-label="Меню">${ROUTES.map(([r, k]) => `<a class="si" href="#${r}" data-r="${r}"><span data-i18n="${k}"></span>${r === 'sb' ? '<span class="b p-wa" id="sbBadge"></span>' : ''}${r === 'devices' ? '<span class="b p-er" id="devBadge"></span>' : ''}</a>`).join('')}
-          <div class="ver"><span data-i18n="version"></span> 1.5</div></nav>
+          <div class="ver"><span data-i18n="version"></span> 1.6</div></nav>
         <main class="main" id="view"></main>
       </div>`;
     I18N.apply();
@@ -311,6 +311,40 @@
   }
 
   // ---------- ссылки для всех неактивированных (филиал или выбранные) ----------
+  // плакат A4 на проходную: QR ведет на установку с привязкой к филиалу (v1.8)
+  async function printPosters(branchId) {
+    const w = window.open('', '_blank'); if (!w) return;
+    w.document.write('<p style="font-family:sans-serif">…</p>');
+    let list;
+    try { list = await API.admin.posters(branchId); } catch (err) { w.close(); return UI.toast(err.message); }
+    let logo = ''; try { logo = await (await fetch(new URL('../shared/logo.svg', location.href).href)).text(); } catch (e) {}
+    const page = x => `<section class="pg"><div class="ph"><span class="lg">${logo}</span><div class="wm">Зеніт-Авто<span>.облік</span></div><span class="br">${esc(x.name.uk)}</span></div>
+      <h1>Відмічайся<br>з <span>телефона</span></h1><p class="ps">Прихід, обід і вихід — за 2 секунди. Без карток і журналів.</p>
+      <div class="qrw"><div class="qr">${UI.qrSvg(x.url, { ecc: 'M', margin: 0 })}</div>
+        <div class="qs"><b>Наведи камеру телефона на код</b>Встанови застосунок «Зеніт-Авто» — це 1 хвилина, один раз.<div class="os"><span>Android</span><span>iPhone</span></div></div></div>
+      <div class="st"><div><b>1</b>Скануй QR камерою</div><div><b>2</b>Встанови застосунок</div><div><b>3</b>Введи свій табельний №</div><div class="g"><b>4</b>Покажи код охоронцю — підтвердить</div></div>
+      <div class="wr"><b>Перший прохід:</b> охоронець перевірить, що це ви, і натисне «Підтвердити». Далі просто показуйте свій код на сканері.</div>
+      <div class="pf"><span>Питання — до керівника філії</span><span><b>Табельний №</b> — у розрахунковому листі</span></div></section>`;
+    w.document.open();
+    w.document.write(`<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8"><title>${esc(t('poster'))}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;600;800&display=swap" rel="stylesheet"><style>
+      @page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'Golos Text',Arial,sans-serif;color:#111318;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .pg{width:210mm;height:297mm;padding:16mm 16mm 12mm;display:flex;flex-direction:column;position:relative;break-after:page;overflow:hidden}
+      .pg:before{content:'';position:absolute;top:0;left:0;right:0;height:5mm;background:#EE7023}
+      .ph{display:flex;align-items:center;gap:4mm}.lg svg{height:16mm;width:auto;display:block}.wm{font-weight:800;font-size:8mm}.wm span{color:#EE7023}
+      .br{margin-left:auto;background:#111318;color:#fff;font-weight:800;font-size:5mm;padding:2mm 4mm;border-radius:3mm;text-transform:uppercase;letter-spacing:.05em}
+      h1{font-size:19mm;line-height:1.02;margin:10mm 0 3mm;font-weight:800}h1 span{color:#EE7023}.ps{font-size:6.5mm;color:#4a4d55;margin:0}
+      .qrw{display:flex;gap:9mm;align-items:center;margin:10mm 0 8mm}.qr{width:88mm;height:88mm;border:2.4mm solid #111318;border-radius:7mm;padding:4mm;flex:none}.qr svg{width:100%;height:100%;display:block}
+      .qs{font-size:5.6mm;line-height:1.45;color:#333}.qs b{display:block;font-size:8.5mm;line-height:1.15;color:#111318;margin-bottom:3mm}
+      .os{display:flex;gap:3mm;margin-top:4mm}.os span{border:.5mm solid #ccc;border-radius:2.5mm;padding:1.2mm 3.5mm;font-weight:800;font-size:4.8mm}
+      .st{display:grid;grid-template-columns:repeat(4,1fr);gap:3.5mm}.st div{background:#FBF3EC;border-radius:5mm;padding:4.5mm 3.5mm;font-size:5mm;line-height:1.3}
+      .st b{display:flex;width:9mm;height:9mm;border-radius:50%;background:#EE7023;color:#fff;align-items:center;justify-content:center;margin-bottom:2.5mm;font-size:5mm}
+      .st .g{background:#E3F4E6}.st .g b{background:#2E9E4F}
+      .wr{margin-top:6mm;background:#111318;color:#fff;border-radius:4mm;padding:4.5mm 5mm;font-size:5.3mm;line-height:1.4}.wr b{color:#F38435}
+      .pf{margin-top:auto;border-top:.7mm solid #111318;padding-top:3.5mm;display:flex;justify-content:space-between;font-size:4.6mm;color:#333}
+      </style></head><body>${list.map(page).join('')}<script>(document.fonts?document.fonts.ready:Promise.resolve()).then(()=>setTimeout(()=>print(),300))<\/script></body></html>`);
+    w.document.close();
+  }
   function bulkLinksModal(target, done) {
     UI.modal(`<h2>${t('bulk_links_title')}</h2><p><b>${esc(target.title)}</b></p><p>${t('bulk_links_text')}</p>
       <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="go">${t('bulk_links_make')}</button></div>`, (m, close) => {
@@ -511,7 +545,7 @@
           <td><input type="checkbox" data-sel="${e.id}" ${sel.has(e.id) ? 'checked' : ''} aria-label="${esc(e.tab)}"></td>
           <td class="t mono">${esc(e.tab)}</td><td><button class="namebtn" type="button" data-ed="${e.id}">${esc(pick(e.name))}</button>${e.active ? '' : `<small style="color:var(--er)">${t('fired')}</small>`}</td><td>${esc(pick(e.pos))}</td><td>${esc(pick(e.branch))}</td>
           <td>${accCell(e)}</td>
-          <td>${e.appActive ? `<span class="pill p-ok">${t('app_on')}</span>` : `<span class="pill p-mu">${t('app_off')}</span>`}</td>
+          <td>${e.appActive ? `<span class="pill p-ok">${t('app_on')}</span>` : `<span class="pill p-mu">${t('app_off')}</span>`}${e.appPending ? ` <span class="pill p-wa">${t('app_pending')}</span>` : ''}</td>
           <td><div class="acts"><button class="btn sm" type="button" data-acc="${e.id}">${t('tab_access')}</button><button class="btn sm" type="button" data-inv="${e.id}" ${e.active ? '' : 'disabled'}>${t('invite')}</button>
             <button class="btn sm" type="button" data-st="${e.id}" ${e.active ? '' : 'disabled'}>${t('static_qr')}</button></div></td></tr>`).join('') || `<tr><td colspan="8" class="empty">${t('nothing_found')}</td></tr>`;
         v.querySelector('#eall').checked = list.length > 0 && list.every(x => sel.has(x.id));
@@ -643,7 +677,7 @@
       v.innerHTML = `<div class="mh"><div><h1>${t('branches_page')}</h1><p id="bsum"></p></div>
         <div class="ctl"><input class="in" id="bq" style="width:200px" value="${esc(st.q)}" placeholder="${t('br_search')}">
           <select class="in fsel" id="bsort"><option value="name">${t('sort_name')}</option><option value="staff">${t('sort_staff')}</option><option value="act">${t('sort_act')}</option></select>
-          <button class="btn" type="button" id="hol">${t('holidays')}</button><button class="btn pri" type="button" id="badd">${t('add_branch')}</button></div></div>
+          <button class="btn" type="button" id="hol">${t('holidays')}</button><button class="btn" type="button" id="posters">${t('posters_all')}</button><button class="btn pri" type="button" id="badd">${t('add_branch')}</button></div></div>
         <div class="bcards" id="bcards"></div>`;
       v.querySelector('#bsort').value = st.sort;
       const tot = all.reduce((a, b) => ({ s: a.s + b.staff, a: a.a + (b.activated || 0), o: a.o + (b.onSite || 0) }), { s: 0, a: 0, o: 0 });
@@ -662,7 +696,7 @@
           <div class="acts" style="justify-content:flex-start;margin-top:10px;flex-wrap:wrap">
             <a class="btn sm pri" href="#emps?branch=${b.id}">${t('emps_page')}</a>
             ${b.staff - (b.activated || 0) > 0 ? `<button class="btn sm" type="button" data-links="${b.id}">${t('links_for')} ${b.staff - (b.activated || 0)}</button>` : ''}
-            <button class="btn sm" type="button" data-addg="${b.id}">${t('add_gate')}</button><button class="btn sm" type="button" data-sch="${b.id}">${t('schedule')}</button></div></section>`; }).join('') || `<p class="empty">${t('nothing_found')}</p>`;
+            <button class="btn sm" type="button" data-poster="${b.id}">${t('poster')}</button><button class="btn sm" type="button" data-addg="${b.id}">${t('add_gate')}</button><button class="btn sm" type="button" data-sch="${b.id}">${t('schedule')}</button></div></section>`; }).join('') || `<p class="empty">${t('nothing_found')}</p>`;
       };
       draw();
       v.querySelector('#bq').oninput = e => { st.q = e.target.value; draw(); };
@@ -674,10 +708,12 @@
       v.querySelector('#badd').onclick = () => ask(t('branch_name'), n => API.admin.saveBranch(n));
       v.addEventListener('click', e => {
         let b = e.target.closest('[data-addg]'); if (b) return ask(t('gate_name'), n => API.admin.saveGate(+b.dataset.addg, n));
+        b = e.target.closest('[data-poster]'); if (b) return printPosters(+b.dataset.poster);
         b = e.target.closest('[data-sch]'); if (b) return scheduleModal(all.find(x => x.id === +b.dataset.sch));
         b = e.target.closest('[data-links]'); if (b) { const br = all.find(x => x.id === +b.dataset.links); return bulkLinksModal({ branchId: br.id, title: pick(br.name) }, render); }
       });
       v.querySelector('#hol').onclick = holidaysModal;
+      v.querySelector('#posters').onclick = () => printPosters(null);
     },
 
     async devices(v) {

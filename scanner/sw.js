@@ -1,5 +1,5 @@
 // Service worker PWA-сканера: интерфейс открывается без интернета, отметки копятся в очереди
-const CACHE = 'za-scan-v6';
+const CACHE = 'za-scan-v7';
 const FILES = ['./', './index.html', './app.js', './manifest.webmanifest',
   '../shared/config.js', '../shared/i18n.js', '../shared/ui.js', '../shared/ui.css', '../shared/api.js',
   '../shared/vendor/qrcode.js', '../shared/vendor/jsQR.js', '../shared/logo.svg', '../shared/icon-192.png'];

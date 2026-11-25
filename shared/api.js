@@ -540,6 +540,9 @@
   const REAL = {
     time: () => call('/time', null, null, 'GET'),
     activate: invite => call('/app', { action: 'activate', invite }).then(data),
+    // установка по плакату филиала: без confirm — «это вы?», с confirm — телефон ждет подтверждения охранником
+    claim: (b, tab, confirm) => call('/app', { action: 'claim', b, tab, confirm: !!confirm }).then(data),
+    unclaim: t => call('/app', { action: 'unclaim' }, t).then(data),
     pendingInvites: async () => [],
     me: t => call('/app', { action: 'me' }, t).then(data),
     myEvents: t => call('/app', { action: 'events' }, t).then(data),
@@ -560,6 +563,7 @@
       employeeIds: f => A('employees', { f: Object.assign({}, f, { mode: 'ids' }) }),
       positions: () => A('positions'),
       bulkInvites: target => A('bulk_invites', target),
+      posters: branchId => A('posters', { branchId: branchId || null }).then(list => list.map(x => Object.assign(x, { url: rel('../employee/index.html?b=' + x.key) }))),
       saveEmployee: x => A('save_employee', { x }),
       createInvite: empId => A('create_invite', { empId }).then(r => ({ code: r.code, url: rel('../employee/index.html?invite=' + r.code) })),
       staticCode: (empId, reissue) => A('static_code', { empId, reissue: !!reissue }),

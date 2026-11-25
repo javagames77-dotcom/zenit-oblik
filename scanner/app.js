@@ -2,7 +2,7 @@
 (function () {
   const C = window.ZA_CONFIG, t = k => I18N.t(k), pick = o => I18N.pick(o), esc = UI.esc;
   const app = document.getElementById('app');
-  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.1.0', PIN = '1234';
+  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.2.0', PIN = '1234';
   UI.theme.set('light');
   const ld = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const sv = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -161,7 +161,9 @@
         body.offline = true; queue.push(body); sv(QKEY, queue); res = { status: 'queued', who: qrWho(text) };
       }
     }
-    updStatus(); showResult(res); beep(res);
+    updStatus();
+    if (res.status === 'confirm') { showConfirm(res, body); return; }
+    showResult(res); beep(res);
     setTimeout(() => { hideResult(); busy = false; if (event !== 'AUTO') setEvent('AUTO'); }, C.RESULT_SHOW_SEC * 1000);
   }
   async function flush() {
@@ -212,6 +214,10 @@
         cls = 'r-yl'; icon = `<div class="circ" style="background:#1B1B1B">${ICON.wa}</div>`;
         body = `<div class="e1">${ev} · ${hm} · ${t('accepted')}</div>${who}<div class="warnbox"><b>${t('r_' + k + '_b')}</b> ${t('r_' + k + '_t')}</div>`; foot = `<span>${t('r_sent')}</span>`; break;
       }
+      case 'CLAIM_REJECTED': cls = 'r-rd'; icon = `<div class="circ" style="background:#fff">${ICON.er}</div>`;
+        body = `<div class="e1">${hm}</div><div class="who">${t('r_conf_rej')}</div>${e ? `<div class="t3">${esc(name)}</div>` : ''}<div class="chip2">${t('r_conf_rej_t')}</div>`; foot = `<span>${t('r_bad_sb')}</span>`; break;
+      case 'PENDING': cls = 'r-gr'; icon = `<div class="circ" style="background:#fff">${ICON.q}</div>`;
+        body = `<div class="e1">${hm}</div><div class="who">${t('r_pending')}</div>${e ? `<div class="t3">${esc(name)}</div>` : ''}<div class="chip2">${t('r_pending_t')}</div>`; foot = '<span></span>'; break;
       case 'DUPLICATE': cls = 'r-gr'; icon = `<div class="circ" style="background:#fff">${ICON.q}</div>`;
         body = `<div class="e1">${r.event ? ev : ''}</div>${e ? `<div class="who">${esc(name)}</div>` : ''}<div class="t3">${t('r_dup')}. ${t('r_dup_t')}</div>`; foot = '<span></span>'; break;
       case 'Q': cls = 'r-gr'; icon = `<div class="circ" style="background:#fff">${ICON.q}</div>`;
@@ -222,6 +228,32 @@
     const el = document.createElement('div'); el.className = 'res ' + cls; el.id = 'res'; el.setAttribute('role', 'alert');
     el.innerHTML = `${top}<div class="mid">${icon}<div>${body}</div></div><div class="ft">${foot}${next}</div>`;
     document.body.appendChild(el);
+  }
+  // первый вход с телефона (установка по плакату): охранник смотрит на человека и подтверждает
+  function showConfirm(r, body) {
+    const e = r.employee || {}, hm = I18N.hm(new Date());
+    const el = document.createElement('div'); el.className = 'res r-bl'; el.id = 'res'; el.setAttribute('role', 'alert');
+    el.innerHTML = `<div class="tp"><span class="tb">${UI.brandHtml('../')}</span><span>${esc(pick(D.branch))} · ${esc(pick(D.gate))} · ${hm}</span></div>
+      <div class="mid"><div class="circ" style="background:#fff">${ICON.q}</div><div>
+        <div class="e1">${t('r_conf_b')}</div>
+        <div class="who">${esc(pick(e.name))}</div>
+        <div class="t3">${t('tab_no')} ${esc(e.tab)} · ${esc(pick(e.pos))} · ${esc(pick(e.branch))}</div>
+        <div class="warnbox">${t('r_conf_t')}</div>
+        <div class="cfm"><button type="button" class="cy" id="cy">${t('r_conf_yes')}</button><button type="button" class="cn" id="cn">${t('r_conf_no')}</button></div>
+      </div></div><div class="ft"><span></span><span></span></div>`;
+    document.body.appendChild(el);
+    try { navigator.vibrate && navigator.vibrate([60, 60, 60]); } catch (x) {}
+    const auto = setTimeout(() => { hideResult(); busy = false; }, 90000);
+    const send = async extra => {
+      clearTimeout(auto); el.querySelectorAll('.cfm button').forEach(b => { b.disabled = true; });
+      let res;
+      try { res = await API.scan(Object.assign({}, body, extra), D.token); }
+      catch (x) { res = { status: 'rejected', verdict: 'PENDING', employee: e }; }
+      hideResult(); showResult(res); beep(res);
+      setTimeout(() => { hideResult(); busy = false; if (event !== 'AUTO') setEvent('AUTO'); }, C.RESULT_SHOW_SEC * 1000);
+    };
+    el.querySelector('#cy').onclick = () => send({ confirm: true });
+    el.querySelector('#cn').onclick = () => send({ reject: true });
   }
   function hideResult() { const r = document.getElementById('res'); if (r) r.remove(); }
 
