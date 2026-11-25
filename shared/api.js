@@ -571,6 +571,8 @@
       saveBranch: name => A('save_branch', { name }),
       saveGate: (branchId, name) => A('save_gate', { branchId, name }),
       devices: () => A('devices'),
+      saveDevice: (id, name, gateId) => A('device_save', { id, name, gateId }),
+      deleteDevice: id => A('device_delete', { id }),
       createDeviceCode: gateId => A('device_code', { gateId }),
       report: f => A('report', { f: f || {} }),
       violations: f => A('violations', { f: f || {} }),

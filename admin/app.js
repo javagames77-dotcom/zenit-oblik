@@ -726,7 +726,24 @@
         <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_status')}</th><th>${t('c_branch')}</th><th>${t('c_gate')}</th><th>ID</th><th>${t('c_seen')}</th><th>${t('c_queue')}</th><th>${t('c_battery')}</th><th></th></tr></thead>
         <tbody>${ds.map(d => `<tr><td>${d.online ? `<span class="pill p-ok">${t('online')}</span>` : `<span class="pill p-er">${t('offline')}</span>`}</td>
           <td><b>${esc(pick(d.branch))}</b></td><td>${esc(pick(d.gate))}</td><td class="mono">${esc(d.name)}</td>
-          <td class="t">${minAgo(d.lastSeen) < 1 ? '&lt; 1' : minAgo(d.lastSeen)} ${t('min')}</td><td>${d.queue}</td><td>${d.battery}%</td><td class="mono" style="color:var(--mu)">v${esc(d.version || '')}</td></tr>`).join('')}</tbody></table></div></section>`;
+          <td class="t">${minAgo(d.lastSeen) < 1 ? '&lt; 1' : minAgo(d.lastSeen)} ${t('min')}</td><td>${d.queue}</td><td>${d.battery == null ? `<span title="${t('no_battery')}" style="color:var(--mu)">—</span>` : d.battery + '%'}</td><td class="mono" style="color:var(--mu)">v${esc(d.version || '')}</td>
+          <td style="white-space:nowrap">${((userGet() || {}).role || 'admin') === 'admin' ? `<button class="btn sm" type="button" data-dedit="${d.id}">${t('dev_edit')}</button> <button class="btn sm" type="button" data-ddel="${d.id}" style="color:var(--er)">${t('dev_del')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`;
+      const gateOpts = sel => bs.map(b => b.gates.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(pick(b.name))} · ${esc(pick(g.name))}</option>`).join('')).join('');
+      v.addEventListener('click', e => {
+        let b = e.target.closest('[data-dedit]');
+        if (b) { const d = ds.find(x => x.id === +b.dataset.dedit);
+          return UI.modal(`<h2>${t('dev_edit_t')}</h2><label class="f">${t('dev_name')}<input class="in" id="dn" value="${esc(d.name || '')}"></label>
+            <label class="f">${t('choose_gate')}<select class="in" id="dg">${gateOpts(d.gateId)}</select></label>
+            <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="ds">${t('save')}</button></div>`, (m, close) => {
+            m.querySelector('#ds').onclick = async () => {
+              try { await API.admin.saveDevice(d.id, m.querySelector('#dn').value.trim(), +m.querySelector('#dg').value); close(); UI.toast(t('saved')); render(); } catch (err) { UI.toast(err.message); }
+            }; }); }
+        b = e.target.closest('[data-ddel]');
+        if (b) { const d = ds.find(x => x.id === +b.dataset.ddel);
+          return UI.modal(`<h2>${t('dev_del')}: ${esc(d.name || '')}</h2><p>${esc(pick(d.branch))} · ${esc(pick(d.gate))}</p><p>${t('dev_del_q')}</p>
+            <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="dx" style="background:var(--er);border-color:var(--er);color:#fff">${t('dev_del')}</button></div>`, (m, close) => {
+            m.querySelector('#dx').onclick = async () => { try { await API.admin.deleteDevice(d.id); close(); UI.toast(t('dev_deleted')); render(); } catch (err) { UI.toast(err.message); } }; }); }
+      });
       v.querySelector('#dadd').onclick = () => UI.modal(`<h2>${t('new_device')}</h2><label class="f">${t('choose_gate')}<select class="in" id="gs">
         ${bs.map(b => b.gates.map(g => `<option value="${g.id}">${esc(pick(b.name))} · ${esc(pick(g.name))}</option>`).join('')).join('')}</select></label>
         <div id="res"></div><div class="acts"><button class="btn" type="button" data-close>${t('close')}</button><button class="btn pri" type="button" id="mk">${t('create')}</button></div>`,
