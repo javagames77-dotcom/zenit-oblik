@@ -81,5 +81,25 @@
     const sel = box.querySelector('.pg-size'); if (sel) sel.onchange = () => cb(1, +sel.value);
   };
   UI.debounce = (fn, ms) => { let tm; return (...a) => { clearTimeout(tm); tm = setTimeout(() => fn(...a), ms || 300); }; };
+  // Мультивыбор с поиском: UI.multi(box, {label, options:[{v,l,c}], value:[], search, onChange})
+  UI.multi = (box, o) => {
+    let val = new Set((o.value || []).map(String));
+    const btnTxt = () => { const n = val.size; if (!n) return `${o.label}: <span class="mu">${UI.esc(window.I18N ? I18N.t('f_any') : 'all')}</span>`;
+      if (n === 1) { const x = o.options.find(z => String(z.v) === [...val][0]); return `${o.label}: <b>${UI.esc(x ? x.l : '')}</b>`; }
+      return `${o.label}: <b>${n}</b>`; };
+    box.className = 'ms'; box.innerHTML = `<button type="button" class="in ms-b ${val.size ? 'on' : ''}">${btnTxt()}</button><div class="ms-p" hidden>
+      ${o.search ? `<input class="in ms-s" placeholder="🔍">` : ''}<div class="ms-l"></div>
+      <div class="ms-f"><button type="button" class="lnk ms-c">${window.I18N ? I18N.t('f_reset') : 'reset'}</button></div></div>`;
+    const P = box.querySelector('.ms-p'), L = box.querySelector('.ms-l'), B = box.querySelector('.ms-b');
+    const list = q => { L.innerHTML = o.options.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<label class="ms-i"><input type="checkbox" value="${UI.esc(x.v)}" ${val.has(String(x.v)) ? 'checked' : ''}><span>${UI.esc(x.l)}</span>${x.c != null ? `<small>${x.c}</small>` : ''}</label>`).join('') || '<div class="ms-e">—</div>'; };
+    const fire = () => { B.innerHTML = btnTxt(); B.classList.toggle('on', val.size > 0); o.onChange([...val]); };
+    list('');
+    B.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ms-p').forEach(x => { if (x !== P) x.hidden = true; }); P.hidden = !P.hidden; if (!P.hidden) { const s = P.querySelector('.ms-s'); if (s) { s.value = ''; list(''); s.focus(); } } };
+    P.addEventListener('click', e => e.stopPropagation());
+    L.addEventListener('change', e => { const c = e.target; c.checked ? val.add(c.value) : val.delete(c.value); fire(); });
+    const s = P.querySelector('.ms-s'); if (s) s.oninput = () => list(s.value.trim().toLowerCase());
+    P.querySelector('.ms-c').onclick = () => { val.clear(); list(s ? s.value.trim().toLowerCase() : ''); fire(); };
+    if (!UI._msDoc) { UI._msDoc = true; document.addEventListener('click', () => document.querySelectorAll('.ms-p').forEach(x => { x.hidden = true; })); }
+  };
   window.UI = UI;
 })();

@@ -344,6 +344,19 @@
         return { success: true, token: s.adminToken, user: s.adminUser };
       },
       async violations() { return { page: { rows: [], total: 0 }, repeat: [] }; },
+      async employeesPage(f) {
+        let all = await MOCK.admin.employees(f.q || '');
+        const st = f.status || 'active';
+        all = all.filter(e => (st === 'all' || (st === 'active' ? e.active : !e.active)) && (!f.branchIds || !f.branchIds.length || f.branchIds.includes(e.branchId))
+          && (!f.positions || !f.positions.length || f.positions.includes(e.pos.uk)) && (!f.kinds || !f.kinds.length || f.kinds.includes(e.kind))
+          && (!f.app || (f.app === 'yes') === !!e.appActive));
+        const sz = f.size == null ? 50 : f.size, pg = f.page || 1;
+        return { total: all.length, overall: all.length, rows: sz ? all.slice((pg - 1) * sz, pg * sz) : all, _all: all };
+      },
+      async employeeIds(f) { return (await MOCK.admin.employeesPage(Object.assign({}, f, { size: 0 })))._all.map(e => e.id); },
+      async positions() { const c = {}; (await MOCK.admin.employees('')).forEach(e => { c[e.pos.uk] = (c[e.pos.uk] || 0) + 1; }); return Object.keys(c).sort().map(pos => ({ pos, count: c[pos] })); },
+      async bulkInvites(target) { const all = (await MOCK.admin.employees('')).filter(e => e.active && !e.appActive && (target.empIds && target.empIds.length ? target.empIds.includes(e.id) : e.branchId === target.branchId));
+        const out = []; for (const e of all) { const r = await MOCK.admin.createInvite(e.id); out.push({ empId: e.id, tab: e.tab, name: e.name, pos: e.pos.uk, code: r.code }); } return out; },
       async discipline(empId, month) { return { month, days: [], totals: {} }; },
       async excuse() { return { ok: true }; },
       async schedule(branchId) { return { branchId, tolerance: 5, days: [1, 2, 3, 4, 5, 6, 7].map(dow => ({ dow, isWork: dow <= 5, winFrom: '08:00', winTo: '18:00', workMin: 540, lunchFrom: '11:00', lunchTo: '13:00', lunchMin: 60 })) }; },
@@ -543,6 +556,10 @@
       punches: f => A('punches', { f: f || {} }),
       check: id => A('check', { id }),
       employees: q => A('employees', { q: q || '' }),
+      employeesPage: f => A('employees', { f }),
+      employeeIds: f => A('employees', { f: Object.assign({}, f, { mode: 'ids' }) }),
+      positions: () => A('positions'),
+      bulkInvites: target => A('bulk_invites', target),
       saveEmployee: x => A('save_employee', { x }),
       createInvite: empId => A('create_invite', { empId }).then(r => ({ code: r.code, url: rel('../employee/index.html?invite=' + r.code) })),
       staticCode: (empId, reissue) => A('static_code', { empId, reissue: !!reissue }),
