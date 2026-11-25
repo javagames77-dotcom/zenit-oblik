@@ -183,6 +183,9 @@
 
   // ---------- дисциплина: общие помощники ----------
   const dur = m => (m == null ? '—' : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`);
+  // минуты -> «6 год 24 хв» / «25 хв»
+  const hmin = m => { m = Math.round(+m || 0); const h = Math.floor(m / 60), r = m % 60, H = I18N.lang === 'uk' ? 'год' : 'ч', M = t('min');
+    return h ? (r ? `${h} ${H} ${r} ${M}` : `${h} ${H}`) : `${r} ${M}`; };
   const ddmm = d => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
   const violPills = d => {
     const out = [];
@@ -191,20 +194,21 @@
     if (!d.isWork && !d.holiday && !d.excuse) out.push(`<span class="pill p-mu">${t('d_weekend')}</span>`);
     if (d.noControl) out.push(`<span class="pill p-mu">${t('d_noctl')}</span>`);
     if (d.absent) out.push(`<span class="pill p-er">${t('v_absent')}</span>`);
-    if (d.late) out.push(`<span class="pill p-wa">${t('v_late')} ${d.late} ${t('min')}</span>`);
-    if (d.early) out.push(`<span class="pill p-wa">${t('v_early')} ${d.early} ${t('min')}</span>`);
+    if (d.late) out.push(`<span class="pill p-wa">${t('v_late')} ${hmin(d.late)}</span>`);
+    if (d.early) out.push(`<span class="pill p-wa">${t('v_early')} ${hmin(d.early)}</span>`);
     if (d.noOut) out.push(`<span class="pill p-wa">${t('v_noout')}</span>`);
     if (d.lunchOutside) out.push(`<span class="pill p-wa">${t('v_lunch_out')}</span>`);
-    if (d.lunchOver) out.push(`<span class="pill p-wa">${t('v_lunch_over')} +${d.lunchOver} ${t('min')}</span>`);
+    if (d.lunchOver) out.push(`<span class="pill p-wa">${t('v_lunch_over')} +${hmin(d.lunchOver)}</span>`);
     if (d.lunchNoReturn) out.push(`<span class="pill p-er">${t('v_lunch_noret')}</span>`);
     if (d.lunchTwice) out.push(`<span class="pill p-wa">${t('v_lunch_twice')}</span>`);
     return out.join(' ');
   };
-  const lunchTxt = d => d.lunchOut ? `${d.lunchOut}–${d.lunchIn || '…'}${d.lunchMin ? ` · ${d.lunchMin} ${t('min')}` : ''}` : '—';
+  const lunchTxt = d => d.lunchOut ? `${d.lunchOut}–${d.lunchIn || '…'}${d.lunchMin ? ` · ${hmin(d.lunchMin)}` : ''}` : '—';
+  const lunchCell = d => d.lunchOut ? `${d.lunchOut}–${d.lunchIn || '…'}${d.lunchMin ? `<small style="font-weight:500">${hmin(d.lunchMin)}</small>` : ''}` : '—';
   const violText = d => violPills(d).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
   const dayRow = (d, withEmp) => `<tr class="${d.violations ? 'bad' : ''}"><td class="t">${ddmm(d.day)}</td>
     ${withEmp ? `<td class="mono">${esc(d.employee.tab)}</td><td><b>${esc(pick(d.employee.name))}</b><small>${esc(pick(d.employee.pos))}</small></td><td>${esc(pick(d.employee.branch))}</td>` : ''}
-    <td class="t">${d.arrival || '—'}</td><td class="t">${d.leave || '—'}</td><td class="t">${lunchTxt(d)}</td><td class="t">${dur(d.workedMin)}</td><td>${violPills(d)}</td></tr>`;
+    <td class="t">${d.arrival || '—'}</td><td class="t">${d.leave || '—'}</td><td class="t">${lunchCell(d)}</td><td class="t">${dur(d.workedMin)}</td><td>${violPills(d)}</td></tr>`;
   const dayHead = withEmp => `<thead><tr><th>${t('c_date')}</th>${withEmp ? `<th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_branch')}</th>` : ''}<th>${t('first_in')}</th><th>${t('last_out')}</th><th>${t('c_lunch')}</th><th>${t('worked')}</th><th>${t('c_viol')}</th></tr></thead>`;
   const monthStart = () => today().slice(0, 8) + '01';
 
@@ -226,7 +230,7 @@
       if (!keep) page = 1;
       const r = await API.admin.violations({ from: v.querySelector('#df').value, to: v.querySelector('#dt').value, branchId: +v.querySelector('#db').value, type: v.querySelector('#dty').value, page, size });
       UI.pager(v.querySelector('#pg'), r.page.total, page, size, (p, s2) => { page = p; size = s2; go(true); });
-      v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${x.lateMin} ${t('min')}</span>`).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
+      v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${hmin(x.lateMin)}</span>`).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
       v.querySelector('#dB').innerHTML = r.page.rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`;
     };
     v.querySelector('#dgo').onclick = () => go(); await go();
@@ -288,8 +292,8 @@
     const prev = new Date(y, mo - 1, 15).toISOString().slice(0, 7), next = new Date(y, mo + 1, 15).toISOString().slice(0, 7);
     box.innerHTML = `<div class="ctl" style="justify-content:space-between;margin-bottom:10px"><button class="btn sm" type="button" data-mo="${prev}">←</button><b>${I18N.pick({ uk: first.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' }), ru: first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }) })}</b><button class="btn sm" type="button" data-mo="${next}" ${next > today().slice(0, 7) ? 'disabled' : ''}>→</button></div>
       <div class="dtot">
-        <div><b>${T.late || 0}</b><span>${t('r_late')}</span><small>${T.lateMin || 0} ${t('min')}</small></div>
-        <div><b>${T.early || 0}</b><span>${t('r_early')}</span><small>${T.earlyMin || 0} ${t('min')}</small></div>
+        <div><b>${T.late || 0}</b><span>${t('r_late')}</span><small>${hmin(T.lateMin)}</small></div>
+        <div><b>${T.early || 0}</b><span>${t('r_early')}</span><small>${hmin(T.earlyMin)}</small></div>
         <div><b>${T.lunch || 0}</b><span>${t('r_lunch')}</span><small>+${T.lunchOverMin || 0} ${t('min')}</small></div>
         <div><b>${T.absent || 0}</b><span>${t('v_absent')}</span><small>${t('r_excused')}: ${T.excused || 0}</small></div>
         <div><b>${dur(T.workedMin || 0)}</b><span>${t('worked')}</span><small>${T.days || 0} ${t('r_days').toLowerCase()}</small></div>
