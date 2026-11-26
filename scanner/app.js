@@ -2,7 +2,7 @@
 (function () {
   const C = window.ZA_CONFIG, t = k => I18N.t(k), pick = o => I18N.pick(o), esc = UI.esc;
   const app = document.getElementById('app');
-  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.2.0', PIN = '1234';
+  const DKEY = 'za-scanner', QKEY = 'za-scanner-queue', VERSION = '1.3.0', PIN = '1234';
   UI.theme.set('light');
   const ld = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const sv = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -225,6 +225,8 @@
       default: cls = 'r-rd'; icon = `<div class="circ" style="background:#fff">${ICON.er}</div>`;
         body = `<div class="e1">${t('r_bad_ev')}</div><div class="who">${t('r_bad')}</div><div class="t3">${t('r_bad_t')}</div><div class="chip2">${t('r_bad_help')}</div>`; foot = `<span>${t('r_bad_sb')}</span>`;
     }
+    // человек числится в отпуске/на больничном — подсказка охране
+    if (r.away && r.status === 'accepted') body += `<div class="chip2" style="background:#fff;color:#1B1B1B">${t('away_scan')} ${t('exc_' + r.away)}</div>`;
     const el = document.createElement('div'); el.className = 'res ' + cls; el.id = 'res'; el.setAttribute('role', 'alert');
     el.innerHTML = `${top}<div class="mid">${icon}<div>${body}</div></div><div class="ft">${foot}${next}</div>`;
     document.body.appendChild(el);

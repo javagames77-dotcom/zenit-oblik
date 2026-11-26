@@ -15,7 +15,7 @@
   const nameGet = () => { const u = userGet(); return (u && (u.name || u.login)) || 'admin'; };
 
   const ROUTES = [
-    ['today', 'nav_today'], ['punches', 'nav_punches'], ['sb', 'nav_sb'], ['emps', 'nav_emps'],
+    ['today', 'nav_today'], ['punches', 'nav_punches'], ['sb', 'nav_sb'], ['emps', 'nav_emps'], ['absences', 'nav_abs'],
     ['access', 'nav_access'], ['passes', 'nav_passes'], ['branches', 'nav_branches'], ['devices', 'nav_devices'], ['reports', 'nav_reports']
   ];
   const route = () => (location.hash.replace('#', '') || 'today').split('?')[0];
@@ -123,7 +123,7 @@
         <a href="../employee/index.html" target="_blank">PWA</a><a href="../scanner/index.html" target="_blank">Scanner</a></div>` : ''}
       <div class="layout">
         <nav class="side" aria-label="Меню">${ROUTES.map(([r, k]) => `<a class="si" href="#${r}" data-r="${r}"><span data-i18n="${k}"></span>${r === 'sb' ? '<span class="b p-wa" id="sbBadge"></span>' : ''}${r === 'devices' ? '<span class="b p-er" id="devBadge"></span>' : ''}</a>`).join('')}
-          <div class="ver"><span data-i18n="version"></span> 1.6</div></nav>
+          <div class="ver"><span data-i18n="version"></span> 1.7</div></nav>
         <main class="main" id="view"></main>
       </div>`;
     I18N.apply();
@@ -131,7 +131,28 @@
     document.getElementById('logoutBtn').onclick = logout;
     const rb = document.getElementById('resetBtn');
     if (rb) rb.onclick = async () => { await API.admin.reset(); UI.toast('OK'); render(); };
-    document.getElementById('gq').addEventListener('keydown', e => { if (e.key === 'Enter') { location.hash = 'emps?q=' + encodeURIComponent(e.target.value); } });
+    const gq = document.getElementById('gq');
+    gq.addEventListener('keydown', e => { if (e.key === 'Enter') { hideGq(); location.hash = 'emps?q=' + encodeURIComponent(e.target.value); } if (e.key === 'Escape') hideGq(); });
+    gq.addEventListener('input', UI.debounce(async () => {
+      const q = gq.value.trim(); if (q.length < 2) return hideGq();
+      let rows = []; try { rows = (await API.admin.employeesPage({ q, status: 'all', page: 1, size: 8 })).rows; } catch (e) {}
+      let dd = document.getElementById('gqd');
+      if (!dd) { dd = document.createElement('div'); dd.id = 'gqd'; dd.className = 'gqd'; gq.parentNode.appendChild(dd); }
+      const r = gq.getBoundingClientRect(); dd.style.left = r.left + 'px'; dd.style.top = (r.bottom + 4) + 'px'; dd.style.width = Math.max(r.width, 320) + 'px';
+      dd.innerHTML = rows.length ? rows.map(e => `<a href="#" data-emp="${e.id}"><b>${esc(pick(e.name))}</b><small>${esc(e.tab)} · ${esc(pick(e.pos))} · ${esc(pick(e.branch) || '')}</small></a>`).join('')
+        : `<div class="empty">${t('nothing_found')}</div>`;
+    }, 250));
+    gq.addEventListener('blur', () => setTimeout(hideGq, 200));
+    // любая фамилия с data-emp открывает карточку (ловим до обработчиков строк)
+    app.addEventListener('click', e => { const a = e.target.closest('[data-emp]'); if (!a) return; e.preventDefault(); e.stopPropagation(); hideGq(); openEmp(+a.dataset.emp); }, true);
+  }
+  function hideGq() { const d = document.getElementById('gqd'); if (d) d.remove(); }
+  // фамилия-ссылка на карточку
+  const en = (emp, inner) => emp && emp.id ? `<a href="#" class="empl" data-emp="${emp.id}">${inner}</a>` : inner;
+  async function openEmp(id, tab) {
+    let e; try { e = await API.admin.employeeGet(id); } catch (err) { return UI.toast(err.message); }
+    if (!state.branches) state.branches = await API.admin.branches();
+    editEmp(e, () => { if (route() === 'emps' || route() === 'absences') render(); }, tab);
   }
 
   // Что нужно подключить к n8n, чтобы раздел стал настоящим. Пока чего-то нет — раздел в пунктире «ДЕМО».
@@ -139,7 +160,7 @@
     today: ['admin.dashboard'], punches: ['admin.punches', 'admin.check'], sb: ['admin.punches', 'admin.check'],
     emps: ['admin.employees', 'admin.saveEmployee', 'admin.createInvite'], access: ['admin.access', 'admin.setAccess', 'admin.profiles'],
     passes: ['admin.passes', 'admin.createPass', 'admin.revokePass'], branches: ['admin.branches', 'admin.saveBranch', 'admin.saveGate'],
-    devices: ['admin.devices', 'admin.createDeviceCode'], reports: ['admin.report']
+    devices: ['admin.devices', 'admin.createDeviceCode'], reports: ['admin.report'], absences: ['admin.absences']
   };
   const isDemo = r => (NEEDS[r] || []).some(n => !API.live(n));
   function markDemo() {
@@ -174,7 +195,7 @@
 
   const rowPunch = (r, isNew) => `<tr class="${isNew ? 'new' : ''}">
     <td class="t">${I18N.hm(r.scannedAt)}${r.offline ? '<small>офлайн</small>' : ''}</td>
-    <td>${r.employee ? `<b>${esc(pick(r.employee.name).split(' ').slice(0, 2).join(' '))}</b><small>${t('tab_no')} ${esc(r.employee.tab)}</small>` : r.guest ? `<b>${esc(r.guest.name)}</b><small>${t('guest_pass')} · ${esc(r.guest.code)}</small>` : `<b>${t('unknown_code')}</b><small class="mono">${esc((r.raw || '').slice(0, 22))}</small>`}</td>
+    <td>${r.employee ? `<b>${en(r.employee, esc(pick(r.employee.name).split(' ').slice(0, 2).join(' ')))}</b><small>${t('tab_no')} ${esc(r.employee.tab)}</small>` : r.guest ? `<b>${esc(r.guest.name)}</b><small>${t('guest_pass')} · ${esc(r.guest.code)}</small>` : `<b>${t('unknown_code')}</b><small class="mono">${esc((r.raw || '').slice(0, 22))}</small>`}</td>
     <td>${r.employee ? esc(pick(r.employee.pos)) : r.guest ? esc(r.guest.company) : '—'}</td>
     <td>${placeTxt(r)}</td>
     <td>${evTxt(r.event)}</td>
@@ -207,7 +228,7 @@
   const lunchCell = d => d.lunchOut ? `${d.lunchOut}–${d.lunchIn || '…'}${d.lunchMin ? `<small style="font-weight:500">${hmin(d.lunchMin)}</small>` : ''}` : '—';
   const violText = d => violPills(d).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
   const dayRow = (d, withEmp) => `<tr class="${d.violations ? 'bad' : ''}"><td class="t">${ddmm(d.day)}</td>
-    ${withEmp ? `<td class="mono">${esc(d.employee.tab)}</td><td><b>${esc(pick(d.employee.name))}</b><small>${esc(pick(d.employee.pos))}</small></td><td>${esc(pick(d.employee.branch))}</td>` : ''}
+    ${withEmp ? `<td class="mono">${esc(d.employee.tab)}</td><td><b>${en(d.employee, esc(pick(d.employee.name)))}</b><small>${esc(pick(d.employee.pos))}</small></td><td>${esc(pick(d.employee.branch))}</td>` : ''}
     <td class="t">${d.arrival || '—'}</td><td class="t">${d.leave || '—'}</td><td class="t">${lunchCell(d)}</td><td class="t">${dur(d.workedMin)}</td><td>${violPills(d)}</td></tr>`;
   const dayHead = withEmp => `<thead><tr><th>${t('c_date')}</th>${withEmp ? `<th>${t('c_tab')}</th><th>${t('c_name')}</th><th>${t('c_branch')}</th>` : ''}<th>${t('first_in')}</th><th>${t('last_out')}</th><th>${t('c_lunch')}</th><th>${t('worked')}</th><th>${t('c_viol')}</th></tr></thead>`;
   const monthStart = () => today().slice(0, 8) + '01';
@@ -230,7 +251,7 @@
       if (!keep) page = 1;
       const r = await API.admin.violations({ from: v.querySelector('#df').value, to: v.querySelector('#dt').value, branchId: +v.querySelector('#db').value, type: v.querySelector('#dty').value, page, size });
       UI.pager(v.querySelector('#pg'), r.page.total, page, size, (p, s2) => { page = p; size = s2; go(true); });
-      v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${hmin(x.lateMin)}</span>`).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
+      v.querySelector('#rep').innerHTML = `<h2>${t('sb_repeat')}</h2>` + (r.repeat.length ? `<div class="chips">${r.repeat.map(x => en(x.employee, `<span class="pill p-wa">${esc(pick(x.employee.name).split(' ').slice(0, 2).join(' '))} · ${x.late}× · ${hmin(x.lateMin)}</span>`)).join(' ')}</div>` : `<p style="margin:0">${t('sb_repeat_none')}</p>`);
       v.querySelector('#dB').innerHTML = r.page.rows.map(d => dayRow(d, true)).join('') || `<tr><td colspan="9" class="empty">—</td></tr>`;
     };
     v.querySelector('#dgo').onclick = () => go(); await go();
@@ -308,7 +329,7 @@
       const d = byDay[b.dataset.day]; const dd = box.querySelector('#dday');
       dd.innerHTML = `<div class="card" style="padding:14px 16px"><b>${ddmm(d.day)}</b> · ${t('first_in')} ${d.arrival || '—'} · ${t('last_out')} ${d.leave || '—'} · ${t('c_lunch')} ${lunchTxt(d)} · ${t('worked')} ${dur(d.workedMin)}
         <div style="margin:8px 0">${violPills(d) || `<span class="pill p-ok">${t('lg_ok')}</span>`}</div>
-        <div class="ctl"><label class="f"><span>${t('excuse')}</span><select class="in" id="exr"><option value="">—</option>${['vacation', 'sick', 'trip', 'leave', 'other'].map(k => `<option value="${k}" ${d.excuse === k ? 'selected' : ''}>${t('exc_' + k)}</option>`).join('')}</select></label>
+        <div class="ctl"><label class="f"><span>${t('excuse')}</span><select class="in" id="exr"><option value="">—</option>${ABS_KINDS.map(k => `<option value="${k}" ${d.excuse === k ? 'selected' : ''}>${t('exc_' + k)}</option>`).join('')}</select></label>
         <button class="btn pri sm" type="button" id="exs">${t('save')}</button></div></div>`;
       dd.querySelector('#exs').onclick = async () => { try { await API.admin.excuse(e.id, d.day, dd.querySelector('#exr').value); disciplinePanel(box, e, month); } catch (err) { UI.toast(err.message); } };
     });
@@ -398,7 +419,8 @@
           <section class="card feed"><div class="ch"><h2>${t('feed')}</h2><div class="tabsl" id="ff">
             <button type="button" data-f="all">${t('f_all')}</button><button type="button" data-f="flag">${t('f_flag')}</button><button type="button" data-f="rej">${t('f_rej')}</button></div></div>
             <div class="tw"><table>${punchHead()}<tbody id="feedB"></tbody></table></div></section>
-          <div class="rcol"><section class="card rc"><h2>${t('sb_title')}</h2><p>${t('sb_sub')}</p><div id="watch"></div><a href="#sb" style="display:inline-block;margin-top:14px;font-weight:700">${t('sb_all')}</a></section>
+          <div class="rcol"><section class="card rc"><h2>${t('abs_today')}</h2><div id="away"></div><a href="#absences" style="display:inline-block;margin-top:10px;font-weight:700">${t('abs_all')}</a></section>
+            <section class="card rc"><h2>${t('sb_title')}</h2><p>${t('sb_sub')}</p><div id="watch"></div><a href="#sb" style="display:inline-block;margin-top:14px;font-weight:700">${t('sb_all')}</a></section>
             <section class="card rc"><h2>${t('devices')}</h2><div id="devs"></div></section></div>
         </div>`;
       document.getElementById('bsel').onchange = e => { state.branchId = +e.target.value; state.lastFeedTop = null; load(); };
@@ -408,6 +430,8 @@
         const d = await API.admin.dashboard(state.branchId);
         if (route() !== 'today') return;
         document.getElementById('upd').textContent = `${t('updated_at')} ${I18N.hm(new Date())}`;
+        API.admin.awayToday(state.branchId).then(a => { const el = document.getElementById('away'); if (!el) return;
+          const ks = ABS_KINDS.filter(k => a[k]); el.innerHTML = ks.length ? `<div class="chips">${ks.map(k => `<a href="#absences?kind=${k}" style="text-decoration:none">${kindPill(k, ' · ' + a[k])}</a>`).join(' ')}</div>` : `<p style="margin:0">${t('abs_today_none')}</p>`; }).catch(() => {});
         document.getElementById('kpis').innerHTML = `
           <div class="card kpi"><div class="l">${t('on_site')}</div><div class="v">${d.onSite} <span style="font-size:17px;font-weight:500;color:var(--mu)">${t('of')} ${d.total}</span></div><div class="bar"><div style="width:${d.total ? Math.round(100 * d.onSite / d.total) : 0}%"></div></div>
             <a class="s" href="#passes" style="display:block;color:#2350B8;text-decoration:none">${t('guests')}: ${d.guestsOnSite} · ${d.passesActive} ${t('passes_active')}</a></div>
@@ -422,7 +446,7 @@
         document.getElementById('feedB').innerHTML = feed.length ? feed.map((r, i) => rowPunch(r, state.lastFeedTop && i === 0 && top !== state.lastFeedTop)).join('') : `<tr><td colspan="6" class="empty">—</td></tr>`;
         state.lastFeedTop = top;
         document.getElementById('watch').innerHTML = d.watch.length ? d.watch.map(w => `<div class="wl"><div class="av">${esc(initials(pick(w.employee.name)))}</div>
-          <div class="n">${esc(pick(w.employee.name).split(' ').slice(0, 2).join(' '))}<small>${esc(pick(w.employee.pos))} · ${esc(pick(w.employee.branch))}</small>${UI.verdictPill(w.verdict).replace('</span>', ` · ${w.count}</span>`)}</div></div>`).join('') : '<p>—</p>';
+          <div class="n">${en(w.employee, esc(pick(w.employee.name).split(' ').slice(0, 2).join(' ')))}<small>${esc(pick(w.employee.pos))} · ${esc(pick(w.employee.branch))}</small>${UI.verdictPill(w.verdict).replace('</span>', ` · ${w.count}</span>`)}</div></div>`).join('') : '<p>—</p>';
         const off = d.devices.filter(x => !x.online);
         document.getElementById('devs').innerHTML = `<div class="st"><div style="background:var(--ok-bg);color:var(--ok)"><b>${d.devices.length - off.length}</b>${t('online')}</div>
           <div style="background:var(--er-bg);color:var(--er)"><b>${off.length}</b>${t('offline')}</div></div>
@@ -471,7 +495,7 @@
         const res = await API.admin.punches({ from: daysAgo(30), to: today(), verdict: 'flag', unchecked: v.querySelector('#unc').checked, page, size }), rows = res.rows;
         UI.pager(v.querySelector('#pg'), res.total, page, size, (p, s2) => { page = p; size = s2; load(); });
         v.querySelector('#sbB').innerHTML = rows.map(r => `<tr><td class="t">${new Date(r.scannedAt).toLocaleDateString('uk-UA').slice(0, 5)} ${I18N.hm(r.scannedAt)}</td>
-          <td>${r.employee ? `<b>${esc(pick(r.employee.name))}</b><small>${t('tab_no')} ${esc(r.employee.tab)} · ${esc(pick(r.employee.pos))}</small>` : r.guest ? `<b>${esc(r.guest.name)}</b><small>${t('guest_pass')} · ${esc(r.guest.company)}</small>` : `<b>${t('unknown_code')}</b>`}</td>
+          <td>${r.employee ? `<b>${en(r.employee, esc(pick(r.employee.name)))}</b><small>${t('tab_no')} ${esc(r.employee.tab)} · ${esc(pick(r.employee.pos))}</small>` : r.guest ? `<b>${esc(r.guest.name)}</b><small>${t('guest_pass')} · ${esc(r.guest.company)}</small>` : `<b>${t('unknown_code')}</b>`}</td>
           <td>${placeTxt(r)}</td><td>${evTxt(r.event)}</td><td>${UI.verdictPill(r.verdict)}${r.codeAge && r.verdict === 'PWA_SCREEN' ? `<small>${Math.round(r.codeAge / 60)} ${t('ago_min')}</small>` : ''}${r.reason ? `<small>${t('pr_' + r.reason)}</small>` : ''}</td>
           <td>${r.checked ? `<span class="pill p-mu">${t('checked')}</span>` : `<button class="btn sm" type="button" data-chk="${r.id}">${t('mark_checked')}</button>`}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">—</td></tr>`;
       };
@@ -514,7 +538,7 @@
         </div>
         <div class="bulk hidden" id="bulk"><b id="bn"></b><button class="lnk" type="button" id="selall"></button>
           <button class="btn sm" type="button" data-bulk="open">${t('open_access')}</button><button class="btn sm" type="button" data-bulk="close">${t('close_access')}</button>
-          <button class="btn sm" type="button" data-bulk="profile">${t('assign_profile')}</button><button class="btn sm" type="button" data-bulk="links">${t('bulk_links')}</button>
+          <button class="btn sm" type="button" data-bulk="profile">${t('assign_profile')}</button><button class="btn sm" type="button" data-bulk="absence">${t('abs_bulk')}</button><button class="btn sm" type="button" data-bulk="links">${t('bulk_links')}</button>
           <button class="btn sm" type="button" data-bulk="block" style="color:var(--er)">${t('block_all')}</button>
           <button class="lnk" type="button" data-bulk="clear">${t('clear_sel')}</button></div>
         <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th><input type="checkbox" id="eall" aria-label="all"></th>
@@ -581,6 +605,7 @@
           if (k === 'clear') { sel.clear(); draw(); }
           if (k === 'open' || k === 'close') accessBulkModal(ids, k === 'open', () => load(true));
           if (k === 'profile') profileBulkModal(ids, () => load(true));
+          if (k === 'absence') absenceModal({ empIds: ids, title: `${t('selected')}: ${ids.length}` }, () => load(true));
           if (k === 'links') bulkLinksModal({ empIds: ids, title: `${t('selected')}: ${ids.length}` }, () => load(true));
           if (k === 'block') { await API.admin.setBlocked(ids, true); UI.toast(`${t('src_blocked')}: ${ids.length}`); load(true); }
           return;
@@ -591,6 +616,45 @@
         if (b.dataset.st) staticModal(emp);
         if (b.dataset.ed) editEmp(emp, () => load(true));
         if (b.dataset.acc) editEmp(emp, () => load(true), 'access');
+      });
+      await load();
+    },
+
+    async absences(v) {
+      const bs = state.branches = await API.admin.branches();
+      const H = new URLSearchParams((location.hash.split('?')[1] || ''));
+      const plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+      const F = { from: H.get('from') || today(), to: H.get('to') || plus(30), branchId: H.get('branch') || '', kind: H.get('kind') || '', q: H.get('q') || '' };
+      let page = 1, size = 50, rows = [], total = 0;
+      v.innerHTML = `<div class="mh"><div><h1>${t('abs_page')}</h1><p>${t('abs_sub')}</p></div><div class="ctl"><button class="btn pri" type="button" id="aadd">${t('abs_add')}</button></div></div>
+        <div class="card fbar" style="align-items:flex-end">
+          <label class="f"><span>${t('abs_from')}</span><input class="in" type="date" id="ff" value="${F.from}"></label>
+          <label class="f"><span>${t('abs_to')}</span><input class="in" type="date" id="ft" value="${F.to}"></label>
+          <select class="in fsel" id="fb"><option value="">${t('all_branches')}</option>${bs.map(b => `<option value="${b.id}" ${String(b.id) === F.branchId ? 'selected' : ''}>${esc(pick(b.name))}</option>`).join('')}</select>
+          <select class="in fsel" id="fk"><option value="">${t('abs_all_kinds')}</option>${ABS_KINDS.map(k => `<option value="${k}" ${k === F.kind ? 'selected' : ''}>${t('exc_' + k)}</option>`).join('')}</select>
+          <input class="in" id="fq" style="width:220px" value="${esc(F.q)}" data-i18n-ph="search_emp">
+        </div>
+        <section class="card" style="overflow:hidden"><div class="tw"><table><thead><tr><th>${t('c_name')}</th><th>${t('c_branch')}</th><th>${t('abs_kind')}</th><th>${t('abs_from')} – ${t('abs_to')}</th><th>${t('abs_days')}</th><th>${t('abs_note')}</th><th>${t('abs_who')}</th><th></th></tr></thead>
+          <tbody id="aB"></tbody></table></div><div id="pg"></div></section>`;
+      const save = () => { const o = new URLSearchParams(); Object.entries(F).forEach(([k, x]) => { if (x) o.set(k === 'branchId' ? 'branch' : k, x); }); history.replaceState(null, '', '#absences?' + o.toString()); };
+      const load = async keep => {
+        if (!keep) page = 1; save();
+        const r = await API.admin.absences(Object.assign({}, F, { branchId: F.branchId || null, page, size })); rows = r.rows; total = r.total;
+        v.querySelector('#aB').innerHTML = rows.map(x => `<tr><td><b>${en(x.employee, esc(pick(x.employee.name)))}</b><small>${t('tab_no')} ${esc(x.employee.tab)} · ${esc(pick(x.employee.pos))}</small></td>
+          <td>${esc(pick(x.employee.branch) || '')}</td><td>${kindPill(x.kind)}</td><td class="t">${dmy(x.from)} – ${dmy(x.to)}</td><td>${x.days}</td><td>${esc(x.note || '')}</td><td style="color:var(--mu)">${esc(x.by || '')}</td>
+          <td><div class="acts"><button class="btn sm" type="button" data-ae="${x.id}">${t('dev_edit')}</button><button class="btn sm" type="button" data-ad="${x.id}" style="color:var(--er)">${t('remove')}</button></div></td></tr>`).join('')
+          || `<tr><td colspan="8" class="empty">${t('abs_none')}</td></tr>`;
+        UI.pager(v.querySelector('#pg'), total, page, size, (p, s2) => { page = p; size = s2; load(true); });
+      };
+      v.querySelector('#ff').onchange = e => { F.from = e.target.value; load(); };
+      v.querySelector('#ft').onchange = e => { F.to = e.target.value; load(); };
+      v.querySelector('#fb').onchange = e => { F.branchId = e.target.value; load(); };
+      v.querySelector('#fk').onchange = e => { F.kind = e.target.value; load(); };
+      v.querySelector('#fq').oninput = UI.debounce(e => { F.q = v.querySelector('#fq').value.trim(); load(); }, 300);
+      v.querySelector('#aadd').onclick = () => absenceModal({}, () => load(true));
+      v.addEventListener('click', async ev => {
+        const ed = ev.target.closest('[data-ae]'); if (ed) return absenceModal({ abs: rows.find(y => y.id === +ed.dataset.ae) }, () => load(true));
+        const dl = ev.target.closest('[data-ad]'); if (dl && confirm(t('abs_del_q'))) { try { await API.admin.deleteAbsence(+dl.dataset.ad); load(true); } catch (err) { UI.toast(err.message); } }
       });
       await load();
     },
@@ -628,7 +692,7 @@
           const g = +gsel.value; sessionStorage.setItem('za-gate', g);
           const rows = await API.admin.gateAccess(g);
           box.querySelector('#gcnt').textContent = `${rows.filter(r => r.allowed).length} ${t('emps_n')}`;
-          box.querySelector('#gB').innerHTML = rows.sort((a, b) => b.allowed - a.allowed).map(r => `<tr style="${r.allowed ? '' : 'opacity:.6'}"><td class="t mono">${esc(r.employee.tab)}</td><td><b>${esc(pick(r.employee.name))}</b></td><td>${esc(pick(r.employee.pos))}</td><td>${esc(pick(r.employee.branch))}</td>
+          box.querySelector('#gB').innerHTML = rows.sort((a, b) => b.allowed - a.allowed).map(r => `<tr style="${r.allowed ? '' : 'opacity:.6'}"><td class="t mono">${esc(r.employee.tab)}</td><td><b>${en(r.employee, esc(pick(r.employee.name)))}</b></td><td>${esc(pick(r.employee.pos))}</td><td>${esc(pick(r.employee.branch))}</td>
             <td>${srcPill(r)}</td><td>${r.allowed ? `<button class="btn sm" type="button" data-cl="${r.employee.id}">${t('close_access')}</button>` : r.src === 'deny' ? `<button class="btn sm" type="button" data-rs="${r.employee.id}">${t('open_access')}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">—</td></tr>`;
         };
         gsel.onchange = load;
@@ -779,7 +843,7 @@
           v.querySelector('#pg').innerHTML = '';
           const list = rows.slice().sort((x, y) => { const a = rval(x, sortK), b = rval(y, sortK); return (a > b ? 1 : a < b ? -1 : 0) * sortD; });
           T.innerHTML = `<thead><tr>${RCOLS.map(([k, l]) => `<th class="sortable" data-k="${k}">${t(l)}${sortK === k ? (sortD < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead>
-            <tbody>${list.map(r => `<tr class="${r.violations ? 'bad' : ''}">${RCOLS.map(([k]) => k === 'name' ? `<td><b>${esc(pick(r.employee.name))}</b><small>${esc(pick(r.employee.pos))}</small></td>`
+            <tbody>${list.map(r => `<tr class="${r.violations ? 'bad' : ''}">${RCOLS.map(([k]) => k === 'name' ? `<td><b>${en(r.employee, esc(pick(r.employee.name)))}</b><small>${esc(pick(r.employee.pos))}</small></td>`
               : k === 'tab' ? `<td class="mono">${esc(r.employee.tab)}</td>` : k === 'branch' ? `<td>${esc(pick(r.employee.branch))}</td>`
               : k === 'workedMin' ? `<td class="t">${dur(r.workedMin)}</td>` : `<td class="t">${r[k] ? `<b>${r[k]}</b>` : '<span style="color:var(--mu)">0</span>'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${RCOLS.length}" class="empty">—</td></tr>`}</tbody>`;
         }
@@ -896,8 +960,8 @@
   function editEmp(e, done, startTab) {
     const kinds = ['office', 'warehouse', 'driver'];
     UI.modal(`<h2>${e ? esc(pick(e.name)) : t('add_emp')}</h2>
-      ${e ? `<div class="tabs2"><button type="button" data-tb="data" class="${startTab === 'access' ? '' : 'on'}">${t('tab_data')}</button><button type="button" data-tb="access" class="${startTab === 'access' ? 'on' : ''}">${t('tab_access')}</button><button type="button" data-tb="disc">${t('tab_disc')}</button></div>` : `<p>${t('emp_card')}</p>`}
-      <div id="tb-data" class="${startTab === 'access' ? 'hidden' : ''}">
+      ${e ? `<div class="tabs2"><button type="button" data-tb="data" class="${startTab && startTab !== 'data' ? '' : 'on'}">${t('tab_data')}</button><button type="button" data-tb="access" class="${startTab === 'access' ? 'on' : ''}">${t('tab_access')}</button><button type="button" data-tb="disc" class="${startTab === 'disc' ? 'on' : ''}">${t('tab_disc')}</button><button type="button" data-tb="abs" class="${startTab === 'abs' ? 'on' : ''}">${t('abs_tab')}</button></div>` : `<p>${t('emp_card')}</p>`}
+      <div id="tb-data" class="${startTab && startTab !== 'data' ? 'hidden' : ''}">
       <div class="grid2">
         <label class="f">${t('c_tab')}<input class="in mono" id="m_tab" value="${e ? esc(e.tab) : ''}" required></label>
         <label class="f">${t('c_branch')}<select class="in" id="m_br">${state.branches.map(b => `<option value="${b.id}" ${e && e.branchId === b.id ? 'selected' : ''}>${esc(pick(b.name))}</option>`).join('')}</select></label>
@@ -910,17 +974,19 @@
       <label class="chk" style="margin-top:14px"><input type="checkbox" id="m_act" ${!e || e.active ? 'checked' : ''}> ${t('f_active')}</label>
       <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="m_save">${t('save')}</button></div></div>
       <div id="tb-access" class="${startTab === 'access' ? '' : 'hidden'}"></div>
-      <div id="tb-disc" class="hidden"></div>
+      <div id="tb-disc" class="hidden"></div><div id="tb-abs" class="hidden"></div>
       ${e ? `<div class="acts" id="accActs" ${startTab === 'access' ? '' : 'style="display:none"'}><button class="btn pri" type="button" data-close>${t('close')}</button></div>` : ''}`,
       (m, close) => {
         m.classList.add('wide');
         const showTab = k => { m.querySelectorAll('[data-tb]').forEach(b => b.classList.toggle('on', b.dataset.tb === k)); m.querySelector('#tb-data').classList.toggle('hidden', k !== 'data');
           m.querySelector('#tb-access').classList.toggle('hidden', k !== 'access'); m.querySelector('#tb-disc').classList.toggle('hidden', k !== 'disc');
-          const aa = m.querySelector('#accActs'); if (aa) aa.style.display = k === 'access' || k === 'disc' ? '' : 'none';
+          m.querySelector('#tb-abs').classList.toggle('hidden', k !== 'abs');
+          const aa = m.querySelector('#accActs'); if (aa) aa.style.display = k !== 'data' ? '' : 'none';
           if (k === 'disc') disciplinePanel(m.querySelector('#tb-disc'), e);
+          if (k === 'abs') absPanel(m.querySelector('#tb-abs'), e);
           if (k === 'access' && !m.querySelector('#tb-access').innerHTML) accessPanel(m.querySelector('#tb-access'), e.id, done); };
         m.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => showTab(b.dataset.tb));
-        if (startTab === 'access') showTab('access');
+        if (startTab && startTab !== 'data') showTab(startTab);
         m.querySelector('#m_save').onclick = async () => {
           const g = id => m.querySelector(id).value.trim();
           if (!g('#m_tab') || !g('#m_nu')) { UI.toast(t('c_tab') + ' / ' + t('c_name')); return; }
@@ -931,6 +997,69 @@
           } catch (err) { UI.toast(err.message === 'tab' ? t('c_tab') + ' — duplicate' : (err.message || 'Error')); }
         };
       });
+  }
+  // ===== отсутствия =====
+  const ABS_KINDS = ['vacation', 'sick', 'remote', 'leave', 'trip', 'unpaid', 'other'];
+  const KIND_CLS = { vacation: 'p-bl', sick: 'p-wa', remote: 'p-ok', leave: 'p-mu', trip: 'p-bl', unpaid: 'p-mu', other: 'p-mu' };
+  const kindPill = (k, extra) => `<span class="pill ${KIND_CLS[k] || 'p-mu'}">${t('exc_' + k)}${extra || ''}</span>`;
+  const dmy = d => d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '';
+  // форма отсутствия: для одного, для выбранных или с поиском людей
+  function absenceModal(o, done) {
+    const a = o.abs || null, picked = new Map();
+    const pickMode = !a && !(o.empIds && o.empIds.length);
+    UI.modal(`<h2>${a ? t('abs_edit') : t('abs_add')}</h2>
+      ${a ? `<p>${esc(pick(a.employee.name))} · ${t('tab_no')} ${esc(a.employee.tab)}</p>` : o.title ? `<p>${esc(o.title)}</p>` : ''}
+      ${pickMode ? `<label class="f">${t('abs_emps')}<input class="in" id="ap" placeholder="${esc(t('abs_pick'))}" autocomplete="off"></label><div id="apl" class="apl"></div><div id="apc" class="chips" style="margin:8px 0"></div>` : ''}
+      <label class="f">${t('abs_kind')}<select class="in" id="ak">${ABS_KINDS.map(k => `<option value="${k}" ${a && a.kind === k ? 'selected' : ''}>${t('exc_' + k)}</option>`).join('')}</select></label>
+      <div class="grid2"><label class="f">${t('abs_from')}<input class="in" type="date" id="af" value="${a ? a.from : today()}"></label><label class="f">${t('abs_to')}<input class="in" type="date" id="at" value="${a ? a.to : today()}"></label></div>
+      <label class="f">${t('abs_note')}<input class="in" id="an" value="${a ? esc(a.note || '') : ''}"></label>
+      <p style="color:var(--mu);margin:6px 0 0">${t('abs_hint_wk')}</p>
+      <div class="acts"><button class="btn" type="button" data-close>${t('cancel')}</button><button class="btn pri" type="button" id="as">${t('save')}</button></div>`, (m, close) => {
+      const af = m.querySelector('#af'), at = m.querySelector('#at');
+      af.onchange = () => { if (at.value < af.value) at.value = af.value; };
+      if (pickMode) {
+        const inp = m.querySelector('#ap'), list = m.querySelector('#apl'), chips = m.querySelector('#apc');
+        const drawChips = () => { chips.innerHTML = [...picked.values()].map(e => `<span class="pill p-bl">${esc(pick(e.name))} <button type="button" class="x" data-unp="${e.id}">×</button></span>`).join(' '); };
+        inp.oninput = UI.debounce(async () => {
+          const q = inp.value.trim(); if (q.length < 2) { list.innerHTML = ''; return; }
+          const r = await API.admin.employeesPage({ q, page: 1, size: 8 });
+          list.innerHTML = r.rows.map(e => `<button type="button" data-pk="${e.id}"><b>${esc(pick(e.name))}</b><small>${esc(e.tab)} · ${esc(pick(e.pos))} · ${esc(pick(e.branch) || '')}</small></button>`).join('') || `<div class="empty">${t('nothing_found')}</div>`;
+          list._rows = r.rows;
+        }, 250);
+        m.addEventListener('click', ev => {
+          const pk = ev.target.closest('[data-pk]'); if (pk) { const e = list._rows.find(x => x.id === +pk.dataset.pk); picked.set(e.id, e); inp.value = ''; list.innerHTML = ''; drawChips(); inp.focus(); }
+          const un = ev.target.closest('[data-unp]'); if (un) { picked.delete(+un.dataset.unp); drawChips(); }
+        });
+      }
+      m.querySelector('#as').onclick = async () => {
+        const body = { kind: m.querySelector('#ak').value, from: af.value, to: at.value, note: m.querySelector('#an').value.trim() };
+        if (a) body.id = a.id; else body.empIds = pickMode ? [...picked.keys()] : o.empIds;
+        if (!a && !body.empIds.length) return UI.toast(t('abs_pick'));
+        try { await API.admin.saveAbsence(body); close(); UI.toast(t('abs_saved')); done && done(); } catch (err) { UI.toast(err.message); }
+      };
+    });
+  }
+  async function absPanel(box, e) {
+    const [r, rule] = await Promise.all([API.admin.absences({ empId: e.id, size: 0 }), API.admin.remoteRule(e.id)]);
+    const R = rule || { dows: [] };
+    box.innerHTML = `<div class="ch" style="padding:0;margin:4px 0 10px"><h2 style="margin:0">${t('abs_tab')}</h2><button class="btn sm pri" type="button" id="aadd">${t('abs_add')}</button></div>
+      <div class="tw"><table><thead><tr><th>${t('abs_kind')}</th><th>${t('abs_from')} – ${t('abs_to')}</th><th>${t('abs_days')}</th><th>${t('abs_note')}</th><th></th></tr></thead><tbody>
+      ${r.rows.map(x => `<tr><td>${kindPill(x.kind)}</td><td class="t">${dmy(x.from)} – ${dmy(x.to)}</td><td>${x.days}</td><td>${esc(x.note || '')}</td>
+        <td><div class="acts"><button class="btn sm" type="button" data-ae="${x.id}">${t('dev_edit')}</button><button class="btn sm" type="button" data-ad="${x.id}" style="color:var(--er)">${t('remove')}</button></div></td></tr>`).join('') || `<tr><td colspan="5" class="empty">—</td></tr>`}</tbody></table></div>
+      <div class="remb"><h3>${t('rem_title')}</h3><p>${t('rem_text')}</p>
+        <div class="dows">${[1, 2, 3, 4, 5, 6, 7].map(d => `<label class="chk"><input type="checkbox" value="${d}" ${R.dows.includes(d) ? 'checked' : ''}> ${t('dow' + d)}</label>`).join('')}</div>
+        <div class="ctl" style="margin-top:10px;align-items:flex-end"><label class="f"><span>${t('rem_from')}</span><input class="in" type="date" id="rf" value="${R.from || ''}"></label>
+          <label class="f"><span>${t('rem_to')}</span><input class="in" type="date" id="rt" value="${R.to || ''}"></label><button class="btn pri" type="button" id="rs">${t('save')}</button></div></div>`;
+    const again = () => absPanel(box, e);
+    box.querySelector('#aadd').onclick = () => absenceModal({ empIds: [e.id], title: pick(e.name) }, again);
+    box.querySelector('#rs').onclick = async () => {
+      const dows = [...box.querySelectorAll('.dows input:checked')].map(x => +x.value);
+      try { await API.admin.saveRemote(e.id, dows, box.querySelector('#rf').value, box.querySelector('#rt').value); UI.toast(t('rem_saved')); } catch (err) { UI.toast(err.message); }
+    };
+    box.onclick = async ev => {
+      const ed = ev.target.closest('[data-ae]'); if (ed) { const x = r.rows.find(y => y.id === +ed.dataset.ae); return absenceModal({ abs: x }, again); }
+      const dl = ev.target.closest('[data-ad]'); if (dl && confirm(t('abs_del_q'))) { try { await API.admin.deleteAbsence(+dl.dataset.ad); again(); } catch (err) { UI.toast(err.message); } }
+    };
   }
   async function inviteModal(e, done) {
     const r = await API.admin.createInvite(e.id);
